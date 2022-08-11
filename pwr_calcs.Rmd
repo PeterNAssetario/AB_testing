@@ -1,0 +1,226 @@
+---
+title: "Hypothesis Testing"
+author: "Peter Novak"
+date: "8/8/2022"
+output: html_document
+---
+
+```{r, warnings = F, message = F, echo = F}
+options(gsubfn.engine = "R")
+library(tweedie)
+library(ggplot2)
+library(gridExtra)
+library(fitdistrplus)
+library(plotly)
+library(sqldf)
+library(remotes)
+```
+
+# Load in data and clean:
+
+```{r, echo = F}
+load_df = function(file_path) {
+  df_all = read.csv(file_path)
+  df_all$user_id    = as.character(df_all$user_id)
+  df_all$test_group = tolower(as.character(df_all$test_group))
+  df_all$is_payer   = ifelse(df_all$total_spend == 0, 0, 1)
+
+  df_payers = df_all[, 2:6]
+  return(df_payers)
+}
+
+
+visualise_df = function(df, name) {
+  df            = df[df$is_payer == 1, ]
+  name          = gsub(" ", "\n", name)
+  n_breaks      = max(min(nrow(df)/200, 40), 20)
+  temp_dens     = density(df$total_wins_spend, adjust = 2)
+  temp_dens_log = density(log(df$total_wins_spend), adjust = 2)
+  
+  hist(df$total_wins_spend,
+    col    = "floralwhite",
+    breaks = n_breaks,
+    prob   = TRUE,
+    xlab   = "Payer Winz. Spend",
+    main   = "Hist.: Payer Winz Spend")
+  lines(temp_dens,
+    col = "firebrick4")
+  legend("topright", legend = name, bty = "n")
+
+  hist(log(df$total_wins_spend),
+    col    = "floralwhite",
+    breaks = n_breaks,
+    prob   = TRUE,
+    xlab   = "Payer log(Winz. Spend)",
+    main   = "Hist.: Payer ln(Winz Spend)")
+  lines(temp_dens_log,
+    col = "firebrick4")
+  legend("topright", legend = name, bty = "n")
+}
+```
+
+```{r}
+# Change these:
+df_bingo_aloha   = load_df("./data/data_bingo_aloha_30.csv")
+df_homw          = load_df("./data/data_homw_30.csv")
+df_idle_mafia    = load_df("./data/data_idle_mafia_30.csv")
+df_spongebob     = load_df("./data/data_spongebob_30.csv")
+df_terra_genesis = load_df("./data/data_terra_genesis_30.csv")
+df_ultimex       = load_df("./data/data_ultimex_30.csv")
+```
+
+```{r}
+temp_mat = matrix(
+  data = NA,
+  nrow = 6,
+  ncol = 3,
+  byrow = F,
+  dimnames = list(c("Bingo Aloha", "HOMW", "Idle Mafia", "Spongebob", "Terra Genesis", "Ultimate X-Poker"),
+                  c("MAU", "prop_p", "prop_c"))
+  )
+
+n = 1
+for (i in list(df_bingo_aloha, df_homw, df_idle_mafia, df_spongebob, df_terra_genesis, df_ultimex)) {
+  temp_freq = as.data.frame(table(i$test_group))
+  temp_mau  = sum(temp_freq$Freq)
+  temp_mat[n, ] = c(temp_mau,
+                    round(temp_freq[temp_freq$Var1 == 'p', 2]/temp_mau, 2),
+                    round(temp_freq[temp_freq$Var1 == 'c', 2]/temp_mau, 2))
+  n = n + 1
+}
+
+temp_mat
+```
+
+```{r}
+par(mar = c(4, 3, 3, 3), mgp = c(2, 0.5,0))
+graphics::layout(mat = matrix(1:6, nrow = 2, ncol = 3, byrow = F),
+       heights = 1, widths = 1)
+
+visualise_df(df_bingo_aloha, "Bingo Aloha")
+visualise_df(df_homw, "HOMW")
+visualise_df(df_idle_mafia, "Idle Mafia")
+visualise_df(df_spongebob, "Spongebob")
+visualise_df(df_terra_genesis, "Terra Genesis")
+visualise_df(df_ultimex, "Ultimate X-Poker")
+```
+
+# Try parametric tests
+
+```{r}
+get_minority_size_t.test = function(df, name, days_since_fl) {
+  parameter_options = list(sig = c(0.80, 0.90), pwr = c(0.60, 0.80), obs_diff = c(0.2, 0.1))
+  parameter_options = expand.grid(parameter_options)
+  
+  out_mat = as.data.frame(matrix(
+    data = NA,
+    nrow = nrow(parameter_options),
+    ncol = 7,
+    dimnames = list(c(), c('client', 'significance', 'power', 'observed_uplift',
+                           'min_minority_size', 'cur_minority_size', 'days_since_AB'))
+    ))
+  
+  for (i in 1:nrow(parameter_options)) {
+    temp_sig = parameter_options[i, 1]
+    temp_pwr = parameter_options[i, 2]
+    temp_upl = parameter_options[i, 3]
+  
+    temp_pwr_t.test = power.t.test(
+      power = temp_pwr,
+      delta = temp_upl * mean(df$total_wins_spend),
+      sd = sd(df$total_wins_spend),
+      sig.level = 1 - temp_sig,
+      type = "two.sample",
+      alternative = "one.sided"
+    )
+  
+    out_mat[i, 1] = name
+    out_mat[i, 2:7] = c(
+      temp_sig,
+      temp_pwr,
+      temp_upl,
+      ceiling(temp_pwr_t.test$n),
+      min(table(df$test_group)),
+      days_since_fl
+    )
+  }
+  
+  return(out_mat)
+}
+```
+
+```{r}
+pwr_bingo_aloha   = get_minority_size_t.test(df_bingo_aloha, "BA", 1)
+pwr_homw          = get_minority_size_t.test(df_homw, "HOMW", 1)
+pwr_idle_mafia    = get_minority_size_t.test(df_idle_mafia, "IM", 1)
+pwr_spongebob     = get_minority_size_t.test(df_spongebob, "SB", 1)
+pwr_terra_genesis = get_minority_size_t.test(df_terra_genesis, "TG", 1)
+pwr_ultimex       = get_minority_size_t.test(df_ultimex, "UX", 1)
+
+pwr_all = rbind(pwr_bingo_aloha,
+                pwr_homw,
+                pwr_idle_mafia,
+                pwr_spongebob,
+                pwr_terra_genesis,
+                pwr_ultimex)
+pwr_all$client          = as.factor(pwr_all$client)
+pwr_all$significance    = as.factor(pwr_all$significance)
+pwr_all$power           = as.factor(pwr_all$power)
+pwr_all$observed_uplift = as.factor(pwr_all$observed_uplift)
+pwr_all$observed_uplift = as.factor(pwr_all$observed_uplift)
+pwr_all$enough_data     = ifelse(pwr_all$min_minority_size >= pwr_all$cur_minority_size, "no", "yes")
+
+head(as.data.frame(pwr_all), 10)
+```
+
+```{r}
+a = ggplot(
+  pwr_all,
+  aes(x = client,
+      y = min_minority_size,
+      fill = enough_data)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ observed_uplift + significance + power, 1, 8) +
+  labs(title = "Plot of req. sample sizes for each company at changing levels of power, significance and hypothesised difference of means - t.test",
+       subtitle = "Row 1: abs(mu1-mu2)\nRow 2: 1 - alpha\nRow 3: 1 - beta",
+       x ="Clients by Category", y = "Min. Req. Obs. in Minority Class")
+
+a
+
+ggsave(
+  "./t-test_plot2.png",
+  plot = a,
+  width = 36, height = 10, units = "cm", scale = 1.5
+)
+```
+
+
+### Extra Stuffs
+
+```{r, eval = F, echo = T}
+n1 = max(table(df_bingo_aloha$test_group))/100
+n2 = min(table(df_bingo_aloha$test_group))/100
+meanlog = 2.01
+sdlog = 1.42
+
+delta = 0.1 * mean(df_bingo_aloha$total_wins_spend)
+al    = 0.05
+nsim  = 100
+
+res = replicate(nsim, {
+  y1 = rlnorm(n1)
+  y2 = rlnorm(n2) + log(delta)
+  wilcox.test(y1,y2)$p.value <= al
+  })
+
+mean(res)
+```
+
+```{r, eval = F, echo = T}
+#Such a packge exists which contains (however for an older version of R):
+power.u.test(res, propn = 1/2, sig.level = 0.025, power = 0.8, silent = F)
+```
+
+
+
