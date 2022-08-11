@@ -1,0 +1,642 @@
+---
+title: "Exploring Tweedie Fit"
+author: "Peter Novák"
+date: "23/6/2022"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    fig_height: 3.7
+    fig_width: 10
+geometry: a4paper, margin = 1.7cm
+fontsize: 11pt
+---
+
+# Data Exploration - Bingo Aloha
+
+## Get packages:
+
+```{r, warnings = F, message = F, echo = F}
+# pymc3
+options(gsubfn.engine = "R")
+library(tweedie)
+library(ggplot2)
+library(gridExtra)
+library(fitdistrplus)
+library(plotly)
+library(sqldf)
+```
+
+```{r, warnings = F, message = F, echo = F}
+dtweedie = function (x, mu, phi, power = NULL) {
+    y = x
+    xi = NULL
+    xi.notation <- TRUE
+    if (is.null(power)) {
+        power <- xi
+    }
+    else {
+        xi.notation <- FALSE
+    }
+    if (is.null(xi)) {
+        xi.notation <- FALSE
+        xi <- power
+    }
+    index.par <- ifelse(xi.notation, "xi", "p")
+    index.par.long <- ifelse(xi.notation, "xi", "power")
+    mu <- array(dim = length(y), mu)
+    if (length(phi) > 1) {
+        if (length(phi) != length(y)) 
+            stop("phi must be scalar, or the same length as y.\n")
+    }
+    else {
+        phi <- array(dim = length(y), phi)
+    }
+    density <- y
+    if (power == 3) {
+        density <- statmod::dinvgauss(x = y, mean = mu, dispersion = phi)
+        return(density)
+    }
+    if (power == 2) {
+        density <- dgamma(rate = 1/(phi * mu), shape = 1/phi, 
+            x = y)
+        return(density)
+    }
+    if (power == 0) {
+        density <- dnorm(mean = mu, sd = sqrt(phi), x = y)
+        return(density)
+    }
+    if ((power == 1) & (all(phi == 1))) {
+        density <- dpois(x = y/phi, lambda = mu/phi)
+        return(density)
+    }
+    id.type0 <- array(dim = length(y))
+    id.series <- id.type0
+    id.interp <- id.type0
+    id.type0 <- (y == 0)
+    if (any(id.type0)) {
+        if (power > 2) {
+            density[id.type0] <- 0
+        }
+        else {
+            lambda <- mu[id.type0]^(2 - power)/(phi[id.type0] * 
+                (2 - power))
+            density[id.type0] <- exp(-lambda)
+        }
+    }
+    xi <- array(dim = length(y))
+    xi[id.type0] <- 0
+    xi[!id.type0] <- phi[!id.type0] * y[!id.type0]^(power - 2)
+    xix <- xi/(1 + xi)
+    if ((power > 1) && (power <= 1.1)) {
+        id.series <- (!id.type0)
+        if (any(id.series)) {
+            density[id.series] <- dtweedie.series(y = y[id.series], 
+                mu = mu[id.series], phi = phi[id.series], power = power)
+        }
+        return(density = density)
+    }
+    if (power == 1) {
+        id.series <- rep(TRUE, length(id.series))
+        id.interp <- rep(FALSE, length(id.series))
+    }
+    if ((power > 1.1) && (power <= 1.2)) {
+        id.interp <- ((xix > 0) & (xix < 0.1))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.1
+            p.hi <- 1.2
+            xix.lo <- 0
+            xix.hi <- 0.1
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.2) && (power <= 1.3)) {
+        id.interp <- ((xix > 0) & (xix < 0.3))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.2
+            p.hi <- 1.3
+            xix.lo <- 0
+            xix.hi <- 0.3
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.3) && (power <= 1.4)) {
+        id.interp <- ((xix > 0) & (xix < 0.5))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.3
+            p.hi <- 1.4
+            xix.lo <- 0
+            xix.hi <- 0.5
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.4) && (power <= 1.5)) {
+        id.interp <- ((xix > 0) & (xix < 0.8))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.4
+            p.hi <- 1.5
+            xix.lo <- 0
+            xix.hi <- 0.8
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.5) && (power < 2)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.5
+            p.hi <- 2
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 2) && (power < 3)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 2
+            p.hi <- 3
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 3) && (power < 4)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 3
+            p.hi <- 4
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 4) && (power < 5)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 4
+            p.hi <- 5
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 5) && (power < 7)) {
+        id.interp <- ((xix > 0) & (xix < 0.5))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 5
+            p.hi <- 7
+            xix.lo <- 0
+            xix.hi <- 0.5
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 7) && (power <= 10)) {
+        id.interp <- ((xix > 0) & (xix < 0.3))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 7
+            p.hi <- 10
+            xix.lo <- 0
+            xix.hi <- 0.3
+            np <- 15
+            nx <- 25
+        }
+    }
+    if (power > 10) {
+        id.series <- (y != 0)
+        id.interp <- (!(id.series | id.type0))
+    }
+    if (any(id.series)) {
+        density[id.series] <- dtweedie.series(y = y[id.series], 
+            mu = mu[id.series], phi = phi[id.series], power = power)
+    }
+    if (any(id.interp)) {
+        dim(grid) <- c(nx + 1, np + 1)
+        rho <- dtweedie.interp(grid, np = np, nx = nx, xix.lo = xix.lo, 
+            xix.hi = xix.hi, p.lo = p.lo, p.hi = p.hi, power = power, 
+            xix = xix[id.interp])
+        dev <- tweedie.dev(power = power, mu = mu[id.interp], 
+            y = y[id.interp])
+        front <- rho/(y[id.interp] * sqrt(2 * pi * xi[id.interp]))
+        density[id.interp] <- front * exp(-1/(2 * phi[id.interp]) * 
+            dev)
+    }
+    density
+}
+
+t_col = function(color, percent = 60, name = NULL) {
+  rgb.val = col2rgb(color)
+  t.col = rgb(rgb.val[1], rgb.val[2], rgb.val[3],
+              max = 255,
+              alpha = (100 - percent) * 255 / 100,
+              names = name)
+  invisible(t.col)
+}
+
+get_dist = function(
+  input_list,
+  distributions,
+  distribution_name,
+  colors = NULL,
+  plot_output = TRUE,
+  verbose = FALSE,
+  depricate = TRUE
+) {
+  input_len = length(input_list)
+  if ((input_len > 10000) && (depricate == TRUE)) {
+    input_list = input_list[sample(1:input_len, 10000)]
+  }
+  
+  par(mar = c(4, 3, 3, 3), mgp = c(2, 0.5,0), mfrow = c(2,2))
+  dist_obj = NULL
+  n = 1
+  for (distr in distribution_name) {
+    temp_fit = NULL
+    if (distr == "tweedie") {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = "tweedie",
+                         start  = list(power = 3, mu = 20, phi = 0.2),
+                         lower  = c(1, 0, 0))
+    }
+    else {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = distr)
+    }
+    dist_obj[[n]] = temp_fit
+    n = n + 1
+  }
+  if (plot_output) {
+    denscomp(dist_obj,
+             legendtext = distribution_name,
+             fitcol = colors)
+    qqcomp(dist_obj,
+           legendtext = distribution_name,
+           fitcol = unlist(lapply(colors, function(x) t_col(x))),
+           fitpch = 16, cex = 0.8)
+    cdfcomp(dist_obj,
+            xlogscale = T, ylogscale = F,
+            legendtext = distribution_name,
+            fitcol = colors)
+    ppcomp(dist_obj,
+           legendtext = distribution_name,
+           fitcol = unlist(lapply(colors, function(x) t_col(x))),
+           fitpch = 16, cex = 0.6)
+  }
+  
+  gof_list = lapply(dist_obj, function(x) { gofstat(x)$aic })
+#  return(gof_list)
+#}
+
+  if (verbose) {
+    print("")
+    for (i in 1:length(distribution_name)) {
+      print(paste0("Goodness of Fit Values for ", distribution_name[i], ":"))
+      print(gofstat(dist_obj[[i]]))
+      print("")
+    }
+  }
+  return(list(
+    param_est  = dist_obj[[which.min(gof_list)]]$estimate,
+    model_used = distribution_name[[which.min(gof_list)]],
+    model_fun = distributions[[which.min(gof_list)]]
+    ))
+}
+```
+
+## Load and clean data:
+
+```{r}
+df_all = read.csv("./data/test_data_ba_1.csv")
+df_all$user_id    = as.character(df_all$user_id)
+df_all$test_group = as.character(df_all$test_group)
+df_all$is_payer   = ifelse(df_all$total_spend == 0, 0, 1)
+head(df_all)
+
+df_payers = df_all[df_all$is_payer == 1, ]
+head(df_payers)
+```
+
+## Clear Problem of Distribution of Player Spend:
+
+One reason for this problem is the presence of duplicate values in the distribution, even worse in winsorised spend as it represents a higher proportion of total player spend:
+
+```{r, echo = F}
+# Total Spend:
+sqldf("
+      WITH t1 AS (
+        SELECT COUNT(*)         count_of
+             , SUM(total_spend) sum_of
+             , total_spend
+             , test_group
+        FROM df_payers
+        GROUP BY total_spend
+               , test_group
+      )
+      SELECT CASE
+                  WHEN count_of > 1 THEN 1
+                  ELSE 0
+             END           dup_spend
+           , test_group
+           , SUM(count_of) count_of
+           , SUM(sum_of)   sum_of
+      FROM t1
+      GROUP BY CASE WHEN count_of > 1 THEN 1 ELSE 0 END
+             , test_group
+      ORDER BY test_group
+             , dup_spend
+      ")
+
+# Win Spend:
+sqldf("
+      WITH t1 AS (
+        SELECT COUNT(*)              count_of
+             , SUM(total_wins_spend) win_sum_of
+             , total_wins_spend
+             , test_group
+        FROM df_payers
+        GROUP BY total_wins_spend
+               , test_group
+      )
+      SELECT CASE
+                  WHEN count_of > 1 THEN 1
+                  ELSE 0
+             END             dup_spend
+           , test_group
+           , SUM(count_of)   count_of
+           , SUM(win_sum_of) win_sum_of
+      FROM t1
+      GROUP BY CASE WHEN count_of > 1 THEN 1 ELSE 0 END
+             , test_group
+      ORDER BY test_group
+             , dup_spend
+      ")
+```
+
+To visualise and compare to a hypothesised continuous distribution which will always assume the probability of an exact value is 0 thus the probability the same value happens twice in a finite sampled data set is 0 as well.
+
+```{r, echo = F}
+par(mar = c(4, 3, 3, 3)-0.2, mgp = c(2, 0.5,0), mfrow = c(1,1))
+win_spend = df_payers$total_wins_spend
+
+
+hist(log(win_spend), breaks = length(win_spend)/20)
+
+
+par(mar = c(4, 3, 3, 3)-0.2, mgp = c(2, 0.5,0), mfrow = c(2,1))
+spend_lnorm = rlnorm(length(win_spend),
+                     get_dist(df_payers$total_spend, c(rnorm), c("lnorm"), F, F)$param_est)
+value_frequency_obs   = as.numeric(as.character(as.data.frame(table(win_spend))$Freq))
+value_frequency_lnorm = as.numeric(as.character(as.data.frame(table(spend_lnorm))$Freq))
+
+plot(value_frequency_obs,
+     type = "l",
+     main = "Observed Value Frequency Distribution",
+     ylab = "P(Spend=X)")
+plot(value_frequency_lnorm,
+     type = "l",
+     main = "Expected Value Frequency Distribution",
+     ylab = "P(Spend=X)")
+```
+
+So how well do most distributions do? The distribution is closest to tweedie out of them:
+
+```{r}
+distributions = c(rlnorm, rexp, rtweedie)
+distribution_name = c("lnorm", "exp", "tweedie")
+dist_obj = get_dist(df_payers$total_wins_spend, distributions, distribution_name,
+                    c("plum", "dodgerblue", "darkgreen"), T, F)
+dist_obj[1:2]
+```
+
+And all criterions outperform log-normal distribution with opt. parameters. p-value of ks-test 0.07
+
+```{r, eval = F, echo = F}
+temp_fit = fitdist(data = df_payers$total_wins_spend,
+                   method = "mle",
+                   distr  = "tweedie",
+                   start  = list(power = 3, mu = 20, phi = 0.2),
+                   lower  = c(1, 0, 0))
+gofstat(temp_fit)
+```
+
+Conclusion:
+
+The tweedie distribution is a better fit for our data, however the presence of duplicate spend values will make any unimodal distribution a likely poor fit. However it would have to be a highly irregular distribution because of the nature of the data (explained logic below):
+
+1) User makes a spend by buying one of x packages with a certain value.
+
+  a) This value is likely to be a "clean" value in the local currency (e.g. 0.99\$, 1.99\$, 4.99\$, 9.99\$, 49.99\$, 99.99\$)
+  
+  b) Local currency is translated to USD but those spend combination are likely to be duplicitous as well.
+  
+  c) a & b repeats when the same player makes a subsequent transaction which adds up to total spend per user.
+  
+2) All spends per user are summed up to make a per user total spent.
+
+3) Daily spends are winsorized -> daily spend above certain threshold is set to threshold -> likely to create duplicitous total spend per user if user only spends on one day and spends above limit.
+
+This process leads to dupl. spend values.
+
+# So what now?
+
+**One caveat, is assuming the data follows a exponential distribution even wrong?**
+
+"One worry might be that selecting a model after considering the data is HARKing (hypothesizing after the results are known; Kerr 1998). In that famous article, Kerr discusses why HARKing may be inadvisable. In particular, HARKing can transform Type I errors (false alarms) into confirmed hypothesis ergo fact. I.e. the non-linear trend in the population data might be a random fluke, and the better fit by the non-linear distribution might be a random fluke.
+
+Bayesian analysis is always conditional on the assumed model space. Often the assumed model space is merely a convenient default. The default is convenient because it is familiar to both the analyst and the audience of the analysis, but the default need not be a theoretical commitment. There are also different goals for data analysis: Describing the one set of data in hand, and generalizing to the population from which the data were sampled. Various methods for penalizing overfitting of noise are aimed at finding a statistical compromise between describing the data in hand and generalizing to other data."
+
+**Further:**
+
+"Indeed, according to Kleijn, v.d Vaart (2012), in the misspecified case, the posterior distribution:
+
+* converges as $n \to \inf$ to a Dirac distribution cantered at a $\hat{\theta}_{ML}$
+
+* does not have the correct variance (unless two values just happen to be same) in order to ensure that credible intervals of the posterior match confidence intervals for $\theta$."
+
+**See for papers about updating prior distributions alongside prior parameters when presented with new data:**
+
+* https://rss.onlinelibrary.wiley.com/doi/full/10.1111/rssb.12158
+
+* https://xianblog.wordpress.com/2013/07/15/a-general-framework-for-updating-belief-functions/
+
+### Next steps:
+
+Investigate best fit distribution for each client data set.
+
+Create a "population" of spenders by analysing every dataset we have so far about player spend.
+
+# Lets try it for each firm:
+
+```{r}
+load_df = function(file_path) {
+  df_all = read.csv(file_path)
+  df_all$user_id    = as.character(df_all$user_id)
+  df_all$test_group = as.character(df_all$test_group)
+  df_all$is_payer   = ifelse(df_all$total_spend == 0, 0, 1)
+
+  df_payers = df_all[df_all$is_payer == 1, ]
+  return(df_payers)
+}
+
+
+visualise_df = function(df, name) {
+  name          = gsub(" ", "\n", name)
+  n_breaks      = max(min(nrow(df)/200, 40), 20)
+  temp_dens     = density(df$total_wins_spend, adjust = 2)
+  temp_dens_log = density(log(df$total_wins_spend), adjust = 2)
+  
+  hist(df$total_wins_spend,
+    col    = "floralwhite",
+    breaks = n_breaks,
+    prob   = TRUE,
+    xlab   = "Payer Winz. Spend",
+    main   = "Hist.: Payer Winz Spend")
+  lines(temp_dens,
+    col = "firebrick4")
+  legend("topright", legend = name, bty = "n")
+
+  hist(log(df$total_wins_spend),
+    col    = "floralwhite",
+    breaks = n_breaks,
+    prob   = TRUE,
+    xlab   = "Payer log(Winz. Spend)",
+    main   = "Hist.: Payer ln(Winz Spend)")
+  lines(temp_dens_log,
+    col = "firebrick4")
+  legend("topright", legend = name, bty = "n")
+}
+
+descdist_to_list = function(descdist_obj) {
+  l_out = c(descdist_obj$min,
+            descdist_obj$max,
+            descdist_obj$median,
+            descdist_obj$mean,
+            descdist_obj$sd,
+            descdist_obj$skewness,
+            descdist_obj$kurtosis)
+  
+  return(l_out)
+}
+```
+
+```{r}
+df_bingo_aloha   = load_df("./data/data_bingo_aloha.csv")
+df_homw          = load_df("./data/data_homw.csv")
+df_idle_mafia    = load_df("./data/data_idle_mafia.csv")
+df_spongebob     = load_df("./data/data_spongebob.csv")
+df_terra_genesis = load_df("./data/data_terra_genesis.csv")
+df_ultimex       = load_df("./data/data_ultimex.csv")
+```
+
+```{r}
+par(mar = c(4, 3, 3, 3), mgp = c(2, 0.5,0))
+graphics::layout(mat = matrix(1:6, nrow = 2, ncol = 3, byrow = F),
+       heights = rep(1, 6), widths = rep(1, 6))
+
+visualise_df(df_bingo_aloha, "Bingo Aloha")
+visualise_df(df_homw, "HOMW")
+visualise_df(df_idle_mafia, "Idle Mafia")
+visualise_df(df_spongebob, "Spongebob")
+visualise_df(df_terra_genesis, "Terra Genesis")
+visualise_df(df_ultimex, "Ultimate X-Poker")
+```
+
+```{r}
+n_boots = 500
+
+dist_bingo_aloha   = descdist(df_bingo_aloha$total_wins_spend, boot = n_boots)
+dist_homw          = descdist(df_homw$total_wins_spend, boot = n_boots)
+dist_idle_mafia    = descdist(df_idle_mafia$total_wins_spend, boot = n_boots)
+dist_spongebob     = descdist(df_spongebob$total_wins_spend, boot = n_boots)
+dist_terra_genesis = descdist(df_terra_genesis$total_wins_spend, boot = n_boots)
+dist_ultimex       = descdist(df_ultimex$total_wins_spend, boot = n_boots)
+
+mat_out = matrix(data = c(descdist_to_list(dist_bingo_aloha),
+                          descdist_to_list(dist_homw),
+                          descdist_to_list(dist_idle_mafia),
+                          descdist_to_list(dist_spongebob),
+                          descdist_to_list(dist_terra_genesis),
+                          descdist_to_list(dist_ultimex)),
+                 nrow = 6, ncol = 7, byrow = T,
+                 dimnames = list(c("Bingo Aloha",
+                                   "HOMW",
+                                   "Idle Mafia",
+                                   "Spongebob",
+                                   "Terra Genesis",
+                                   "Ultimate X-Poker"),
+                                 c("Min",
+                                   "Max",
+                                   "Median",
+                                   "Mean",
+                                   "SD",
+                                   "Skewness",
+                                   "Kurtosis")))
+as.data.frame(mat_out)
+```
+
+```{r}
+distributions = c(rlnorm, rweibull, rexp)#, rtweedie)
+distribution_name = c("lnorm", "weibull", "exp")#, "tweedie")
+colours = c("plum", "darkgreen", "dodgerblue")#, "cyan")
+
+fit_bingo_aloha   = get_dist(df_bingo_aloha$total_wins_spend,
+                             distributions, distribution_name, colours, T, F, F)
+fit_homw          = get_dist(df_homw$total_wins_spend/100,
+                             distributions, distribution_name, colours, T, F, F)
+fit_idle_mafia    = get_dist(df_idle_mafia$total_wins_spend/100,
+                             distributions, distribution_name, colours, T, F, F)
+fit_spongebob     = get_dist(df_spongebob$total_wins_spend,
+                             distributions, distribution_name, colours, T, F, F)
+fit_terra_genesis = get_dist(df_terra_genesis$total_wins_spend,
+                             distributions, distribution_name, colours, T, F, F)
+fit_ultimex       = get_dist(df_ultimex$total_wins_spend,
+                             distributions, distribution_name, colours, T, F, F)
+
+mat_out2 = matrix(data = c(fit_bingo_aloha$model_used,
+                           fit_homw$model_used,
+                           fit_idle_mafia$model_used,
+                           fit_spongebob$model_used,
+                           fit_terra_genesis$model_used,
+                           fit_ultimex$model_used),
+                  nrow = 6, ncol = 1, byrow = T,
+                  dimnames = list(c("Bingo Aloha",
+                                    "HOMW",
+                                    "Idle Mafia",
+                                    "Spongebob",
+                                    "Terra Genesis",
+                                    "Ultimate X-Poker"),
+                                  c("Model Used")))
+as.data.frame(mat_out2)
+```
+
+All get lnorm as best dist.

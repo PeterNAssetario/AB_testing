@@ -1,0 +1,734 @@
+---
+title: "Exploring Bayesian A/B Testing & Bingo Aloha Performance"
+author: "Peter Novák"
+date: "23/6/2022"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    fig_height: 3.7
+    fig_width: 10
+geometry: a4paper, margin = 1.7cm
+fontsize: 11pt
+---
+
+# Data Exploration - Bingo Aloha
+
+## Get packages:
+
+```{r, warnings = F, message = F}
+# pymc3
+library(ggplot2)
+library(gridExtra)
+library(fitdistrplus)
+library(plotly)
+```
+
+## Load and clean data:
+
+```{r}
+df_all = read.csv("/Users/PeterNovak/Desktop/Bayesian AB Testing/test_data_ba_1.csv")
+df_all$user_id    = as.character(df_all$user_id)
+df_all$test_group = as.character(df_all$test_group)
+df_all$is_payer   = ifelse(df_all$total_spend == 0, 0, 1)
+head(df_all)
+
+df_payers = df_all[df_all$is_payer == 1, ]
+head(df_payers)
+```
+
+## Distribution of spend of payers:
+
+```{r}
+#plotdist(df_payers$total_spend, histo = TRUE, demp = TRUE)
+#plotdist(df_payers$total_wins_spend, histo = TRUE, demp = TRUE)
+#plotdist(log(df_payers$total_spend), histo = TRUE, demp = TRUE)
+#plotdist(log(df_payers$total_wins_spend), histo = TRUE, demp = TRUE)
+
+plot1_1 = ggplot(df_payers, aes(x=total_spend)) + 
+  geom_histogram(aes(y=..density..),
+                 binwidth=.5,
+                 colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  labs(subtitle = "Histogram: Payer Spend")
+
+plot1_2 = ggplot(df_payers, aes(x=total_wins_spend)) + 
+  geom_histogram(aes(y=..density..),
+                 binwidth=.5,
+                 colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  labs(subtitle = "Histogram: Payer Winzorised Spend")
+
+plot2_1 = ggplot(df_payers, aes(x=total_spend)) + 
+  geom_histogram(aes(y=..density..),
+                 binwidth=.5,
+                 colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  labs(subtitle = "Histogram: Payer ln(Spend)") +
+  scale_x_continuous(trans='log')
+
+plot2_2 = ggplot(df_payers, aes(x=total_wins_spend)) + 
+  geom_histogram(aes(y=..density..),
+                 binwidth=.5,
+                 colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  labs(subtitle = "Histogram: Payer ln(Winzorised Spend)") +
+  scale_x_continuous(trans='log')
+
+grid.arrange(plot1_1, plot1_2, plot2_1, plot2_2,  ncol=2)
+```
+
+```{r}
+descdist(df_payers$total_wins_spend, boot = 1000)
+```
+
+```{r}
+lapply(dist_obj, function(x) { gofstat(x)$aic })
+```
+
+
+```{r}
+# Check best best distribution within whole family of distributions
+
+par(mfrow = c(2, 2))
+distributions = c(rgamma, rlnorm, rweibull, rexp)
+distribution_name = c("gamma", "lnorm", "weibull", "exp")
+# cauchy, exp, logis, norm, unif: dont work and most likely will not for any of our data sets
+dist_obj = NULL
+n = 1
+for (distr in distribution_name) {
+  temp_fit  = fitdist(df_payers$total_wins_spend, distr)
+  
+  dist_obj[[n]] = temp_fit
+  n = n + 1
+}
+
+denscomp(dist_obj, legendtext = distribution_name)
+qqcomp(dist_obj,   legendtext = distribution_name)
+cdfcomp(dist_obj,  legendtext = distribution_name)
+ppcomp(dist_obj,   legendtext = distribution_name)
+
+ks_test = lapply(dist_obj, function(x) { gofstat(x)$ks })
+```
+
+## Most likely parameters of most likely distribution and their CIs
+
+```{r}
+dist_obj[[which.min(ks_test)]]$estimate
+temp_boot = bootdist(dist_obj[[which.min(ks_test)]], niter = 250)
+summary(temp_boot)
+plot(temp_boot)
+```
+
+
+# Set up get_dist and get_dist_params functions:
+
+```{r, warnings = F, message = F}
+distributions = c(rgamma, rlnorm, rweibull, rexp)
+distribution_name = c("gamma", "lnorm", "weibull", "exp")
+get_dist = function(
+  input_list,
+  distributions,
+  distribution_name,
+  plot_output,
+  verbose
+) {
+  par(mfrow = c(2, 2))
+  dist_obj = NULL
+  n = 1
+  for (distr in distribution_name) {
+    temp_fit = fitdist(input_list, distr)
+    dist_obj[[n]] = temp_fit
+    n = n + 1
+  }
+  
+  if (plot_output) {
+    denscomp(dist_obj, legendtext = distribution_name)
+    qqcomp(dist_obj,   legendtext = distribution_name)
+    cdfcomp(dist_obj,  legendtext = distribution_name)
+    ppcomp(dist_obj,   legendtext = distribution_name)
+  }
+  
+  ks_test = lapply(dist_obj, function(x) { gofstat(x)$ks })
+  
+  if (verbose) {
+    print("")
+    print(paste("Distribution Used:", distribution_name[which.min(ks_test)]))
+    print(paste("ks_test p-value:", round(as.numeric(ks_test[[which.min(ks_test)]]),4)))
+    print("")
+    print("Optimal Distribution Parameters:")
+  }
+  return(list(
+    param_est  = dist_obj[[which.min(ks_test)]]$estimate,
+    model_used = distributions[[which.min(ks_test)]]
+    ))
+}
+
+get_dist(df_payers$total_wins_spend, distributions, distribution_name, T, T)
+```
+
+# Exploration of Bayesian Testing:
+
+## Set up Functions:
+
+### Exponential normal:
+
+```{r}
+bayes_arpu_log_normal <- function(
+  alphaA, betaA,
+  muA, lambdaA, alphaA2, betaA2,
+  alphaB, betaB,
+  muB, lambdaB, alphaB2, betaB2,
+  MSamples
+) {
+  lambdaA = rbeta(MSamples, alphaA, betaA)
+  lambdaB = rbeta(MSamples, alphaB, betaB)
+  omegaA  = log(rnormgamma(MSamples, muA, lambdaA, alphaA2, betaA2))
+  omegaB  = log(rnormgamma(MSamples, muB, lambdaB, alphaB2, betaB2))
+
+  convProbBbeatsA = sum(lambdaB > lambdaA)/MSamples
+  diffTemp        = lambdaB - lambdaA
+  convExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  convExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  revProbBbeatsA = sum(1/omegaB > 1/omegaA)/MSamples
+  diffTemp       = 1/omegaB - 1/omegaA
+  revExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  revExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  arpuProbBbeatsA = sum(lambdaB/omegaB > lambdaA/omegaA)/MSamples
+  diffTemp        = lambdaB/omegaB - lambdaA/omegaA
+  arpuExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  arpuExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  list(
+    convProbBbeatsA = convProbBbeatsA,
+    convExpLossA    = convExpLossA,
+    convExpLossB    = convExpLossB,
+    revProbBbeatsA  = revProbBbeatsA,
+    revExpLossA     = revExpLossA,
+    revExpLossB     = revExpLossB,
+    arpuProbBbeatsA = arpuProbBbeatsA,
+    arpuExpLossA    = arpuExpLossA,
+    arpuExpLossB    = arpuExpLossB,
+    sampleLambdaA   = lambdaA,
+    sampleLambdaB   = lambdaB,
+    sampleOmegaA    = omegaA,
+    sampleOmegaB    = omegaB
+  )
+}
+```
+
+
+```{r}
+rnormgamma <- function(n, mu, lambda, alpha, beta) {
+  tau = rgamma(n, alpha, beta)
+  x   = rnorm(n, mu, sqrt(1/(lambda*tau)))
+  return(x)
+}
+
+data_all_a  = df_all[df_all$test_group == 'C', ]
+data_all_b  = df_all[df_all$test_group == 'P', ]
+data_pay_a  = df_payers[df_payers$test_group == 'C', ]
+data_pay_b  = df_payers[df_payers$test_group == 'P', ]
+n_trial_a   = nrow(data_all_a)
+n_trial_b   = nrow(data_all_b)
+n_success_a = nrow(data_pay_a)
+n_success_b = nrow(data_pay_b)
+revenue_a   = sum(data_all_a$total_wins_spend)
+revenue_b   = sum(data_all_b$total_wins_spend)
+SS_a        = var(data_pay_a$total_wins_spend)*(n_success_a - 1)
+SS_b        = var(data_pay_b$total_wins_spend)*(n_success_b - 1)
+alpha       = 1000
+beta        = 1000
+name_A      = 'Control'
+name_B      = 'Personalised'
+
+# Assumptions:
+# mu = \bar_{x}
+# v  = n
+# alpha = beta = 1
+res = bayes_arpu_normal(
+    alphaA   = n_success_a+1,
+    alphaB   = n_success_b+1,
+    betaA    = n_trial_a-n_success_a+1,
+    betaB    = n_trial_b-n_success_b+1,
+    muA      = 2 * (revenue_a^2) / n_success_a,
+    lambdaA  = 2 * n_success_a,
+    alphaA2  = alpha + n_success_a/2,
+    betaA2   = beta + SS_b/2,
+    muB      = 2 * (revenue_b^2) / n_success_b,
+    lambdaB  = 2 * n_success_b,
+    alphaB2  = alpha + n_success_b/2,
+    betaB2   = beta + SS_b/2,
+    MSamples = 10000
+)
+
+post_sample_A    = res$sampleLambdaA/res$sampleOmegaA
+post_sample_B    = res$sampleLambdaB/res$sampleOmegaB
+diff_post_sample = post_sample_B - post_sample_A
+hdi_A            = hdi_of_sample(post_sample_A)
+hdi_B            = hdi_of_sample(post_sample_B)
+hdi_diff         = hdi_of_sample(diff_post_sample)
+x_lim = {
+  a = min(hdi_A, hdi_B)
+  b = max(hdi_A, hdi_B)
+  c(1.2*a-0.2*b, 1.2*b-0.2*a)
+}
+x_lim_diff = {
+  a = hdi_diff[1]
+  b = hdi_diff[2]
+  c(1.2*a-0.2*b, 1.2*b-0.2*a)
+}
+
+plot_sample_density(
+  sample    = diff_post_sample,
+  hdi       = hdi_diff
+)
+
+plot_sample_densities(
+  sampleDataA = post_sample_A,
+  sampleDataB = post_sample_B,
+  hdiA = hdi_A,
+  hdiB = hdi_B,
+  name_A,
+  name_B
+)
+
+tab = data.frame(matrix(
+  c(n_trial_a,
+    sprintf('%.3g%%', n_success_a/n_trial_a*100),
+    sprintf('%.4g€', revenue_a/n_trial_a),
+    sprintf('%.4g€', revenue_a/n_success_a),
+    sprintf('[%.3g€, %.3g€]', hdi_A[1], hdi_A[2]),
+    n_trial_b,
+    sprintf('%.3g%%', n_success_b/n_trial_b*100),
+    sprintf('%.4g€', revenue_b/n_trial_b),
+    sprintf('%.4g€', revenue_b/n_success_b),
+    sprintf('[%.3g€, %.3g€]', hdi_A[1], hdi_A[2]),
+    sprintf('N/A'),
+    sprintf('%.3g%%', n_success_b/n_trial_b*100 - n_success_a/n_trial_a*100),
+    sprintf('%.4g€', revenue_b/n_trial_b - revenue_a/n_trial_a),
+    sprintf('%.4g€', revenue_b/n_success_b - revenue_a/n_success_a),
+    sprintf('[%.3g€, %.3g€]', hdi_diff[1], hdi_diff[2])
+    ),
+  nrow = 5, ncol = 3, byrow = F,
+  dimnames = list(c('sample size', 'conversion', 'ARPU', 'ARPPU', '95% HDI'),
+                  c(name_A, name_B, paste(name_B, '-', name_A)))
+  )
+)
+tab
+
+tab2 <- data.frame(matrix(
+  c(sprintf('%.1f%%', res$convProbBbeatsA*100),
+    sprintf('%.2g%%', res$convExpLossA*100),
+    sprintf('%.2g%%', res$convExpLossB*100),
+    sprintf('%.1f%%', res$revProbBbeatsA*100),
+    sprintf('%.2g €', res$revExpLossA),
+    sprintf('%.2g €', res$revExpLossB),
+    sprintf('%.1f%%', res$arpuProbBbeatsA*100),
+    sprintf('%.2g €', res$arpuExpLossA),
+    sprintf('%.2g €', res$arpuExpLossB)
+    ),
+  nrow = 3, ncol = 3, byrow = F,
+  dimnames = list(c('P(B > A)', 'E(Uplift | B > A)', 'E(Downlift | B < A)'),
+                  c('conversion', 'ARPPU', 'ARPU'))
+  )
+)
+tab2
+```
+
+
+```{r}
+# Arguments:
+#   Alpha and beta parameters of beta distributions for A and B
+#   k and theta parameters of gamma distributions for A and B
+#   alpha = number of successes + 1
+#   beta = number of failures + 1
+#   k = payer count + 1
+#   theta = 1/(1 + revenue)
+# Assumptions:
+#   payer ~ Bernoulli(lambda)
+#   lambda ~ Beta(alpha, beta)
+#   revenue ~ Exp(omega)
+#   omega ~ Gamma(k, theta)
+#   ARPU = E(payer)*E(revenue) = lambda*1/omega
+#  all variables are calculated for A and B group
+# Return value:
+#   probBbeatsA = probability that the B version has higher ARPU than the A version
+#   expLossA = expected loss on condition that we select A but B is better
+#   expLossB = expected loss on condition that we select B but A is better
+# Implemented based on:
+#   VWO white paper: https://cdn2.hubspot.net/hubfs/310840/VWO_SmartStats_technical_whitepaper.pdf
+#   Pixel Federation Bayesian AB Testing: https://portal.pixelfederation.com/en/blog/article/ab-testing-methodology-change
+bayes_arpu_exp <- function(
+  alphaA, betaA,
+  kA, thetaA,
+  alphaB, betaB,
+  kB, thetaB,
+  MSamples
+) {
+  lambdaA = rbeta(MSamples, alphaA, betaA)
+  lambdaB = rbeta(MSamples, alphaB, betaB)
+  omegaA  = rgamma(MSamples, shape = kA, scale = thetaA)
+  omegaB  = rgamma(MSamples, shape = kB, scale = thetaB)
+  
+  convProbBbeatsA = sum(lambdaB > lambdaA)/MSamples
+  diffTemp        = lambdaB - lambdaA
+  convExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  convExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  revProbBbeatsA = sum(1/omegaB > 1/omegaA)/MSamples
+  diffTemp       = 1/omegaB - 1/omegaA
+  revExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  revExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  arpuProbBbeatsA = sum(lambdaB/omegaB > lambdaA/omegaA)/MSamples
+  diffTemp        = lambdaB/omegaB - lambdaA/omegaA
+  arpuExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  arpuExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  list(
+    convProbBbeatsA = convProbBbeatsA,
+    convExpLossA    = convExpLossA,
+    convExpLossB    = convExpLossB,
+    revProbBbeatsA  = revProbBbeatsA,
+    revExpLossA     = revExpLossA,
+    revExpLossB     = revExpLossB,
+    arpuProbBbeatsA = arpuProbBbeatsA,
+    arpuExpLossA    = arpuExpLossA,
+    arpuExpLossB    = arpuExpLossB,
+    sampleLambdaA   = lambdaA,
+    sampleLambdaB   = lambdaB,
+    sampleOmegaA    = omegaA,
+    sampleOmegaB    = omegaB
+  )
+}
+
+
+# Calculates the HDI interval from a sample of representative values
+# estimated as shortest credible interval
+# Arguments:
+#   sampleVec is a vector of representative values from a probability
+#     distribution.
+#   credMass is a scalar between 0 and 1, indicating the mass within
+#     the credible interval that is to be estimated.
+# Return value:
+#   Highest density iterval (HDI) limits in a vector
+hdi_of_sample = function(
+  sampleVec, credMass = 0.95
+) {
+  sortedPts <- sort(sampleVec)
+  sortedPtsLength <- length(sortedPts)
+  if(sortedPtsLength >= 3) {
+    ciIdxInc <- min(ceiling(credMass*sortedPtsLength), sortedPtsLength - 1)
+    nCIs <- sortedPtsLength - ciIdxInc
+    ciWidth <- rep(0, nCIs)
+    for (i in 1:nCIs) {
+      ciWidth[i] <- sortedPts[i + ciIdxInc] - sortedPts[i]
+    }
+    HDImin <- sortedPts[which.min(ciWidth)]
+    HDImax <- sortedPts[which.min(ciWidth) + ciIdxInc]
+    HDIlim <- c(HDImin, HDImax)
+  } else {
+    HDIlim <- c(min(sortedPts), max(sortedPts))
+  }
+  return(HDIlim)
+}
+
+
+# Creates plotly chart of approximate density based on a sample data
+plot_sample_density = function(
+  sampleData, hdi = c(-0.1, 0.1)
+) {
+  dens     = density(sampleData, bw = 'nrd')
+  plotData = data.frame(x = dens$x, y = dens$y)
+  x        = plotData$x
+  y        = plotData$y
+  xArea    = plotData[x >= hdi[1] & x <= hdi[2], ]$x
+  yArea    = plotData[x >= hdi[1] & x <= hdi[2], ]$y
+  
+  plot_ly(
+    x = x,
+    y = y,
+    type = 'scatter',
+    mode = 'lines',
+    name = 'ARPU B - A',
+    line = list(color = '#F27B0C'),
+    hoverinfo = 'none',
+    text = ~paste(sprintf('%.3g%%', x*100)),
+    showlegend = FALSE
+  ) %>% add_trace(
+    x = xArea,
+    y = yArea,
+    type = 'scatter',
+    mode = 'lines',
+    fill = 'tozeroy',
+    fillcolor = 'rgba(242, 123, 12, 0.2)',
+    line = list(color = '#F27B0C'),
+    hoverinfo = 'none',
+    text = ~paste(sprintf('%.3g%%', xArea*100)),
+    showlegend = FALSE
+  ) %>% layout(
+    title = 'Approximate distribution of difference of ARPU B - A',
+    title = list(font = 14),
+    xaxis = list(showgrid = FALSE, fixedrange = TRUE),
+    yaxis = list(showline = FALSE, showticklabels = FALSE, showgrid = FALSE, fixedrange = TRUE),
+    legend = list(x = 0.9, y = 0.9)
+  ) %>% config(displayModeBar = FALSE)
+}
+
+
+# Creates plotly chart of approximate densities based on a sample data
+plot_sample_densities = function(
+  sampleDataA, hdiA = c(-0.1, 0.1),
+  sampleDataB, hdiB = c(-0.1, 0.1),
+  nameA, nameB
+) {
+  densA     = density(sampleDataA, bw = 'nrd')
+  densB     = density(sampleDataB, bw = 'nrd')
+  plotDataA = data.frame(x = densA$x, y = densA$y)
+  plotDataB = data.frame(x = densB$x, y = densB$y)
+  xA        = plotDataA$x
+  yA        = plotDataA$y
+  xB        = plotDataB$x
+  yB        = plotDataB$y
+  xAreaA    = plotDataA[xA >= hdiA[1] & xA <= hdiA[2], ]$x
+  yAreaA    = plotDataA[xA >= hdiA[1] & xA <= hdiA[2], ]$y
+  xAreaB    = plotDataB[xB >= hdiB[1] & xB <= hdiB[2], ]$x
+  yAreaB    = plotDataB[xB >= hdiB[1] & xB <= hdiB[2], ]$y
+  
+  plot_ly(
+    x = xA,
+    y = yA,
+    type = 'scatter',
+    mode = 'lines',
+    name = nameA,
+    line = list(color = '#5BC0DE'),
+    hoverinfo = 'none'
+  ) %>% add_trace(
+    x = xAreaA,
+    y = yAreaA,
+    type = 'scatter',
+    mode = 'lines',
+    fill = 'tozeroy',
+    fillcolor = 'rgba(91, 192, 222, 0.2)',
+    line = list(color = '#5BC0DE'),
+    hoverinfo = 'none',
+    showlegend = FALSE
+  ) %>% add_trace(
+    x = xB,
+    y = yB,
+    type = 'scatter',
+    mode = 'lines',
+    name = nameB,
+    line = list(color = '#5CB85C'),
+    hoverinfo = 'none'
+  ) %>% add_trace(
+    x = xAreaB,
+    y = yAreaB,
+    type = 'scatter',
+    mode = 'lines',
+    fill = 'tozeroy',
+    fillcolor = 'rgba(92, 184, 92, 0.2)',
+    line = list(color = '#5CB85C'),
+    hoverinfo = 'none',
+    showlegend = FALSE
+  ) %>% layout(
+    title = 'Distribution of ARPU A and B',
+    title = list(font = 14),
+    xaxis = list(showgrid = FALSE, fixedrange = TRUE),
+    yaxis = list(showline = FALSE, showticklabels = FALSE, showgrid = FALSE, fixedrange = TRUE),
+    legend = list(x = 0.9, y = 0.9)
+  ) %>% config(displayModeBar = FALSE)
+}
+```
+
+## Running an example
+
+```{r}
+n_trial_a   = nrow(df_all[df_all$test_group == 'C', ])
+n_trial_b   = nrow(df_all[df_all$test_group == 'P', ])
+n_success_a = nrow(df_payers[df_payers$test_group == 'C', ])
+n_success_b = nrow(df_payers[df_payers$test_group == 'P', ])
+revenue_a   = sum(df_all[df_all$test_group == 'C', ]$total_wins_spend)
+revenue_b   = sum(df_all[df_all$test_group == 'P', ]$total_wins_spend)
+name_A = 'Control'
+name_B = 'Personalised'
+
+res = bayes_arpu_exp(
+    alphaA   = n_success_a+1,
+    alphaB   = n_success_b+1,
+    betaA    = n_trial_a-n_success_a+1,
+    betaB    = n_trial_b-n_success_b+1,
+    kA       = n_trial_a+1,
+    kB       = n_trial_b+1,
+    thetaA   = 1/(1+revenue_a),
+    thetaB   = 1/(1+revenue_b),
+    MSamples = 10000
+  )
+
+post_sample_A    = res$sampleLambdaA/res$sampleOmegaA
+post_sample_B    = res$sampleLambdaB/res$sampleOmegaB
+diff_post_sample = post_sample_B - post_sample_A
+hdi_A            = hdi_of_sample(post_sample_A)
+hdi_B            = hdi_of_sample(post_sample_B)
+hdi_diff         = hdi_of_sample(diff_post_sample)
+x_lim = {
+  a = min(hdi_A, hdi_B)
+  b = max(hdi_A, hdi_B)
+  c(1.2*a-0.2*b, 1.2*b-0.2*a)
+}
+x_lim_diff = {
+  a = hdi_diff[1]
+  b = hdi_diff[2]
+  c(1.2*a-0.2*b, 1.2*b-0.2*a)
+}
+
+plot_sample_density(
+  sample    = diff_post_sample,
+  hdi       = hdi_diff
+)
+
+plot_sample_densities(
+  sampleDataA = post_sample_A,
+  sampleDataB = post_sample_B,
+  hdiA = hdi_A,
+  hdiB = hdi_B,
+  name_A,
+  name_B
+)
+
+tab = data.frame(matrix(
+  c(n_trial_a,
+    sprintf('%.3g%%', n_success_a/n_trial_a*100),
+    sprintf('%.4g€', revenue_a/n_trial_a),
+    sprintf('%.4g€', revenue_a/n_success_a),
+    sprintf('[%.3g€, %.3g€]', hdi_A[1], hdi_A[2]),
+    n_trial_b,
+    sprintf('%.3g%%', n_success_b/n_trial_b*100),
+    sprintf('%.4g€', revenue_b/n_trial_b),
+    sprintf('%.4g€', revenue_b/n_success_b),
+    sprintf('[%.3g€, %.3g€]', hdi_A[1], hdi_A[2]),
+    sprintf('N/A'),
+    sprintf('%.3g%%', n_success_b/n_trial_b*100 - n_success_a/n_trial_a*100),
+    sprintf('%.4g€', revenue_b/n_trial_b - revenue_a/n_trial_a),
+    sprintf('%.4g€', revenue_b/n_success_b - revenue_a/n_success_a),
+    sprintf('[%.3g€, %.3g€]', hdi_diff[1], hdi_diff[2])
+    ),
+  nrow = 5, ncol = 3, byrow = F,
+  dimnames = list(c('sample size', 'conversion', 'ARPU', 'ARPPU', '95% HDI'),
+                  c(name_A, name_B, paste(name_B, '-', name_A)))
+  )
+)
+tab
+
+tab2 <- data.frame(matrix(
+  c(sprintf('%.1f%%', res$convProbBbeatsA*100),
+    sprintf('%.2g%%', res$convExpLossA*100),
+    sprintf('%.2g%%', res$convExpLossB*100),
+    sprintf('%.1f%%', res$revProbBbeatsA*100),
+    sprintf('%.2g €', res$revExpLossA),
+    sprintf('%.2g €', res$revExpLossB),
+    sprintf('%.1f%%', res$arpuProbBbeatsA*100),
+    sprintf('%.2g €', res$arpuExpLossA),
+    sprintf('%.2g €', res$arpuExpLossB)
+    ),
+  nrow = 3, ncol = 3, byrow = F,
+  dimnames = list(c('P(B > A)', 'E(Uplift | B > A)', 'E(Downlift | B < A)'),
+                  c('conversion', 'ARPPU', 'ARPU'))
+  )
+)
+tab2
+```
+
+# Old functions:
+
+```{r, echo = F, eval = F}
+paramsA = get_dist(df_payers[df_payers$test_group == 'C', ]$total_wins_spend, distributions, distribution_name, F, F)
+paramsB = get_dist(df_payers[df_payers$test_group == 'P', ]$total_wins_spend, distributions, distribution_name, F, F)
+
+res = bayes_arpu(
+  alphaA = n_success_a+1,
+  betaA = n_trial_a-n_success_a+1,
+  paramsA = paramsA$param_est,
+  dist_funA = paramsA$model_used,
+  alphaB = n_success_b+1,
+  betaB = n_trial_a-n_success_a+1,
+  paramsB = paramsB$param_est,
+  dist_funB = paramsB$model_used,
+  MSamples = 100000
+)
+
+# Arguments:
+#   alpha = number of successes + 1
+#   beta = number of failures + 1
+#   dist_fun = distribution which revenue follows
+#   params = parameters for given input distribution
+#   MSamples = Number of samples to draw from prior distribution idealy +inf
+# Assumptions:
+#   payer ~ Bernoulli(lambda)
+#   lambda ~ Beta(alpha, beta)
+#   revenue ~ Exp(omega)
+#   omega ~ Gamma(k, theta)
+#   revenue ~ D(params) <- specified as input
+#   ARPU = E(payer)*E(revenue) = lambda*1/omega
+#  all variables are calculated for A and B group
+# Return value:
+#   probBbeatsA = probability that the B version has higher ARPU than the A version
+#   expLossA = expected loss on condition that we select A but B is better
+#   expLossB = expected loss on condition that we select B but A is better
+# Implemented based on:
+#   VWO white paper: https://cdn2.hubspot.net/hubfs/310840/VWO_SmartStats_technical_whitepaper.pdf
+#   Pixel Federation Bayesian AB Testing: https://portal.pixelfederation.com/en/blog/article/ab-testing-methodology-change
+bayes_arpu = function(
+  alphaA,
+  betaA,
+  paramsA,
+  dist_funA,
+  alphaB,
+  betaB,
+  paramsB,
+  dist_funB,
+  MSamples
+) {
+  lambdaA = rbeta(MSamples, alphaA, betaA)
+  lambdaB = rbeta(MSamples, alphaB, betaB)
+  if (length(paramsA) == 1) { omegaA = dist_funA(MSamples, paramsA[1]) }
+  else                      { omegaA = dist_funA(MSamples, paramsA[1], paramsA[2]) }
+  if (length(paramsB) == 1) { omegaB = dist_funB(MSamples, paramsB[1]) }
+  else                      { omegaB = dist_funB(MSamples, paramsB[1], paramsB[2]) }
+  
+  convProbBbeatsA = sum(lambdaB > lambdaA)/MSamples
+  diffTemp        = lambdaB - lambdaA
+  convExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  convExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  revProbBbeatsA = sum(1/omegaB > 1/omegaA)/MSamples
+  diffTemp       = 1/omegaB - 1/omegaA
+  revExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  revExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  arpuProbBbeatsA = sum(lambdaB/omegaB > lambdaA/omegaA)/MSamples
+  diffTemp        = lambdaB/omegaB - lambdaA/omegaA
+  arpuExpLossA    = sum(diffTemp*(diffTemp > 0))/MSamples
+  arpuExpLossB    = sum(-diffTemp*(-diffTemp > 0))/MSamples
+  
+  list(
+    convProbBbeatsA = convProbBbeatsA,
+    convExpLossA    = convExpLossA,
+    convExpLossB    = convExpLossB,
+    revProbBbeatsA  = revProbBbeatsA,
+    revExpLossA     = revExpLossA,
+    revExpLossB     = revExpLossB,
+    arpuProbBbeatsA = arpuProbBbeatsA,
+    arpuExpLossA    = arpuExpLossA,
+    arpuExpLossB    = arpuExpLossB,
+    sampleLambdaA   = lambdaA,
+    sampleLambdaB   = lambdaB,
+    sampleOmegaA    = omegaA,
+    sampleOmegaB    = omegaB
+  )
+}
+```
+
