@@ -18,7 +18,7 @@ class ProduceResults:
         if distribution == "lognorm":
             return self._produce_results_lognorm_dist(df)
         else:
-            print("Given distribution not supported")
+            raise NotImplementedError("Results for given distribution are not implemented yet.")
 
     def _produce_results_lognorm_dist(self, df: pd.DataFrame):
 
