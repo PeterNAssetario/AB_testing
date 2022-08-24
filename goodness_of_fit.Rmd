@@ -1,0 +1,660 @@
+---
+title: "Indepth Goodness-of-Fit"
+author: "Peter Novák"
+date: "23/6/2022"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    fig_height: 3.7
+    fig_width: 10
+geometry: a4paper, margin = 1.7cm
+fontsize: 11pt
+---
+
+# Data Exploration - Bingo Aloha
+
+## Get packages:
+
+```{r, warnings = F, message = F, echo = F}
+library(tweedie)
+library(ggplot2)
+#library(gridExtra)
+library(fitdistrplus)
+#library(plotly)
+library(VaRES)
+
+qlogcauchy = varlogcauchy ; qfrechet = varfrechet ; qloglogis = varloglogis ; qburr = varburr
+```
+
+## Function Prep:
+
+```{r, warnings = F, message = F, echo = F}
+dtweedie = function (x, mu, phi, power = NULL) {
+    y = x
+    xi = NULL
+    xi.notation <- TRUE
+    if (is.null(power)) {
+        power <- xi
+    }
+    else {
+        xi.notation <- FALSE
+    }
+    if (is.null(xi)) {
+        xi.notation <- FALSE
+        xi <- power
+    }
+    index.par <- ifelse(xi.notation, "xi", "p")
+    index.par.long <- ifelse(xi.notation, "xi", "power")
+    mu <- array(dim = length(y), mu)
+    if (length(phi) > 1) {
+        if (length(phi) != length(y)) 
+            stop("phi must be scalar, or the same length as y.\n")
+    }
+    else {
+        phi <- array(dim = length(y), phi)
+    }
+    density <- y
+    if (power == 3) {
+        density <- statmod::dinvgauss(x = y, mean = mu, dispersion = phi)
+        return(density)
+    }
+    if (power == 2) {
+        density <- dgamma(rate = 1/(phi * mu), shape = 1/phi, 
+            x = y)
+        return(density)
+    }
+    if (power == 0) {
+        density <- dnorm(mean = mu, sd = sqrt(phi), x = y)
+        return(density)
+    }
+    if ((power == 1) & (all(phi == 1))) {
+        density <- dpois(x = y/phi, lambda = mu/phi)
+        return(density)
+    }
+    id.type0 <- array(dim = length(y))
+    id.series <- id.type0
+    id.interp <- id.type0
+    id.type0 <- (y == 0)
+    if (any(id.type0)) {
+        if (power > 2) {
+            density[id.type0] <- 0
+        }
+        else {
+            lambda <- mu[id.type0]^(2 - power)/(phi[id.type0] * 
+                (2 - power))
+            density[id.type0] <- exp(-lambda)
+        }
+    }
+    xi <- array(dim = length(y))
+    xi[id.type0] <- 0
+    xi[!id.type0] <- phi[!id.type0] * y[!id.type0]^(power - 2)
+    xix <- xi/(1 + xi)
+    if ((power > 1) && (power <= 1.1)) {
+        id.series <- (!id.type0)
+        if (any(id.series)) {
+            density[id.series] <- dtweedie.series(y = y[id.series], 
+                mu = mu[id.series], phi = phi[id.series], power = power)
+        }
+        return(density = density)
+    }
+    if (power == 1) {
+        id.series <- rep(TRUE, length(id.series))
+        id.interp <- rep(FALSE, length(id.series))
+    }
+    if ((power > 1.1) && (power <= 1.2)) {
+        id.interp <- ((xix > 0) & (xix < 0.1))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.1
+            p.hi <- 1.2
+            xix.lo <- 0
+            xix.hi <- 0.1
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.2) && (power <= 1.3)) {
+        id.interp <- ((xix > 0) & (xix < 0.3))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.2
+            p.hi <- 1.3
+            xix.lo <- 0
+            xix.hi <- 0.3
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.3) && (power <= 1.4)) {
+        id.interp <- ((xix > 0) & (xix < 0.5))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.3
+            p.hi <- 1.4
+            xix.lo <- 0
+            xix.hi <- 0.5
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.4) && (power <= 1.5)) {
+        id.interp <- ((xix > 0) & (xix < 0.8))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.4
+            p.hi <- 1.5
+            xix.lo <- 0
+            xix.hi <- 0.8
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 1.5) && (power < 2)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 1.5
+            p.hi <- 2
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power > 2) && (power < 3)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 2
+            p.hi <- 3
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 3) && (power < 4)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 3
+            p.hi <- 4
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 4) && (power < 5)) {
+        id.interp <- ((xix > 0) & (xix < 0.9))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 4
+            p.hi <- 5
+            xix.lo <- 0
+            xix.hi <- 0.9
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 5) && (power < 7)) {
+        id.interp <- ((xix > 0) & (xix < 0.5))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 5
+            p.hi <- 7
+            xix.lo <- 0
+            xix.hi <- 0.5
+            np <- 15
+            nx <- 25
+        }
+    }
+    if ((power >= 7) && (power <= 10)) {
+        id.interp <- ((xix > 0) & (xix < 0.3))
+        id.series <- (!(id.interp | id.type0))
+        if (any(id.interp)) {
+            grid <- stored.grids(power)
+            p.lo <- 7
+            p.hi <- 10
+            xix.lo <- 0
+            xix.hi <- 0.3
+            np <- 15
+            nx <- 25
+        }
+    }
+    if (power > 10) {
+        id.series <- (y != 0)
+        id.interp <- (!(id.series | id.type0))
+    }
+    if (any(id.series)) {
+        density[id.series] <- dtweedie.series(y = y[id.series], 
+            mu = mu[id.series], phi = phi[id.series], power = power)
+    }
+    if (any(id.interp)) {
+        dim(grid) <- c(nx + 1, np + 1)
+        rho <- dtweedie.interp(grid, np = np, nx = nx, xix.lo = xix.lo, 
+            xix.hi = xix.hi, p.lo = p.lo, p.hi = p.hi, power = power, 
+            xix = xix[id.interp])
+        dev <- tweedie.dev(power = power, mu = mu[id.interp], 
+            y = y[id.interp])
+        front <- rho/(y[id.interp] * sqrt(2 * pi * xi[id.interp]))
+        density[id.interp] <- front * exp(-1/(2 * phi[id.interp]) * 
+            dev)
+    }
+    density
+}
+
+t_col = function(color, percent = 60, name = NULL) {
+  rgb.val = col2rgb(color)
+  t.col = rgb(rgb.val[1], rgb.val[2], rgb.val[3],
+              max = 255,
+              alpha = (100 - percent) * 255 / 100,
+              names = name)
+  invisible(t.col)
+}
+```
+
+```{r, warnings = F, message = F, echo = F}
+get_dist = function(
+  input_list,
+  distribution_name,
+  colors = NULL,
+  plot_output = TRUE,
+  verbose = FALSE,
+  out_best = TRUE,
+  depricate = TRUE
+) {
+  input_len = length(input_list)
+  if ((input_len > 10000) && (depricate == TRUE)) {
+    input_list = input_list[sample(1:input_len, 10000)]
+  }
+  
+  par(mar = c(4, 3, 3, 3), mgp = c(2, 0.5,0), mfrow = c(2,2))
+  dist_obj = NULL
+  n = 1
+  for (distr in distribution_name) {
+    temp_fit = NULL
+    if (distr == "tweedie") {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = "tweedie",
+                         start  = list(power = 3, mu = 20, phi = 0.2),
+                         lower  = c(1, 0, 0))
+    } else if (distr == "logcauchy") {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = "logcauchy",
+                         start  = list(mu = 0, sigma = 1),
+                         lower  = c(NA, 0))
+    } else if (distr == "frechet") {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = "frechet",
+                         start  = list(alpha = 1, sigma = 1),
+                         lower  = c(0, 0))
+    } else if (distr == "loglogis") {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = "loglogis",
+                         start  = list(a = 1, b = 1),
+                         lower  = c(0, 0))
+    } else if (distr == "burr") {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = "burr",
+                         start  = list(a = 1, b = 1),
+                         lower  = c(0, 0))
+    } else if (distr == "pareto") {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = "pareto",
+                         start  = list(K = 1, c = 1),
+                         lower  = c(0, 0))
+    } else {
+      temp_fit = fitdist(data   = input_list,
+                         method = "mle",
+                         distr  = distr)
+    }
+    dist_obj[[n]] = temp_fit
+    n = n + 1
+  }
+  if (plot_output) {
+    denscomp(dist_obj,
+             legendtext = distribution_name,
+             fitcol = colors)
+    qqcomp(dist_obj,
+           legendtext = distribution_name,
+           fitcol = unlist(lapply(colors, function(x) t_col(x))),
+           fitpch = 16, cex = 0.8)
+    cdfcomp(dist_obj,
+            xlogscale = T, ylogscale = F,
+            legendtext = distribution_name,
+            fitcol = colors)
+    ppcomp(dist_obj,
+           legendtext = distribution_name,
+           fitcol = unlist(lapply(colors, function(x) t_col(x))),
+           fitpch = 16, cex = 0.6)
+  }
+  
+  gof_list  = lapply(dist_obj, function(x) { gofstat(x)$aic })
+  aic_list  = gof_list
+  bic_list  = lapply(dist_obj, function(x) { gofstat(x)$bic })
+  chsq_list = lapply(dist_obj, function(x) { gofstat(x)$chisq })
+  ks_list   = lapply(dist_obj, function(x) { gofstat(x)$ks })
+  
+  if (verbose) {
+    print("")
+    for (i in 1:length(distribution_name)) {
+      print(paste0("Goodness of Fit Values for ", distribution_name[i], ":"))
+      print(gofstat(dist_obj[[i]]))
+      print("")
+    }
+  }
+  
+  if (out_best) {
+    return(list(
+      param_est  = dist_obj[[which.min(gof_list)]]$estimate,
+      model_used = distribution_name[[which.min(gof_list)]],
+      ))
+  }
+  else {
+    mat = matrix(NA, nrow = length(distribution_name), ncol = 4,
+                 dimnames = list(c(distribution_name),
+                                 c("aic", "bic", "chsq", "ks")))
+    for (i in 1:nrow(mat)) {
+      mat[i, ] = c(as.numeric(aic_list[i]),
+                   as.numeric(bic_list[i]),
+                   as.numeric(chsq_list[i]),
+                   as.numeric(ks_list[i]))
+    }
+    return(mat)
+  }
+}
+```
+
+```{r, warnings = F, message = F, echo = F}
+load_df = function(file_path) {
+  df_all = read.csv(file_path)
+  df_all$user_id    = as.character(df_all$user_id)
+  df_all$test_group = as.character(df_all$test_group)
+  df_all$is_payer   = ifelse(df_all$total_spend == 0, 0, 1)
+
+  df_payers = df_all[df_all$is_payer == 1, ]
+  return(df_payers)
+}
+```
+
+## Matus Data:
+
+```{r}
+df_matus = read.csv("/Users/PeterNovak/Desktop/ba_data.csv")
+
+distribution_name = c("lnorm", "weibull", "frechet", "loglogis", "burr", "gamma", "exp")#, "tweedie")
+colours = c("purple", "darkgreen", "dodgerblue", "orange", "red", "brown", "cyan")#, "pink")
+fit_matus   = get_dist(df_matus$total_wins_spend,
+                             distribution_name, colours, T, F, F)
+
+as.data.frame(fit_matus)
+```
+
+```{r}
+# Your rate
+ks.test(df_matus$total_wins_spend, rexp(100000, rate = 1.319))
+# My best rate
+ks.test(df_matus$total_wins_spend, rexp(100000, rate = 0.0289886))
+# My best distribution
+ks.test(df_matus$total_wins_spend, rlnorm(100000, meanlog = 2.210660, sdlog = 1.516598))
+```
+
+## All Client Data:
+
+```{r}
+df_bingo_aloha   = load_df("./data/data_bingo_aloha_30.csv")
+df_homw          = load_df("./data/data_homw_30.csv")
+df_idle_mafia    = load_df("./data/data_idle_mafia_30.csv")
+df_spongebob     = load_df("./data/data_spongebob_30.csv")
+df_terra_genesis = load_df("./data/data_terra_genesis_30.csv")
+df_ultimex       = load_df("./data/data_ultimex_30.csv")
+```
+
+```{r}
+n_boots = 500
+dist_bingo_aloha   = descdist(df_bingo_aloha$total_wins_spend, boot = n_boots)
+dist_homw          = descdist(df_homw$total_wins_spend, boot = n_boots)
+dist_idle_mafia    = descdist(df_idle_mafia$total_wins_spend, boot = n_boots)
+dist_spongebob     = descdist(df_spongebob$total_wins_spend, boot = n_boots)
+dist_terra_genesis = descdist(df_terra_genesis$total_wins_spend, boot = n_boots)
+dist_ultimex       = descdist(df_ultimex$total_wins_spend, boot = n_boots)
+```
+
+```{r}
+distribution_name = c("lnorm", "weibull", "frechet", "loglogis", "burr", "gamma", "exp")#, "tweedie")
+colours = c("purple", "darkgreen", "dodgerblue", "orange", "red", "brown", "cyan")#, "pink")
+
+scale = 100 # otherwise exp fit doesnt work because e^x = inf  if  x > 710
+fit_bingo_aloha   = get_dist(df_bingo_aloha$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_homw          = get_dist(df_homw$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_idle_mafia    = get_dist(df_idle_mafia$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_spongebob     = get_dist(df_spongebob$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_terra_genesis = get_dist(df_terra_genesis$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_ultimex       = get_dist(df_ultimex$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+raw_fit = list(fit_bingo_aloha, fit_homw, fit_idle_mafia, fit_spongebob, fit_terra_genesis, fit_ultimex)
+
+mat_out2 = matrix(data = NA, nrow = 6, ncol = length(distribution_name),
+                  dimnames = list(c("Bingo Aloha",
+                                    "HOMW",
+                                    "Idle Mafia",
+                                    "Spongebob",
+                                    "Terra Genesis",
+                                    "Ultimate X-Poker"),
+                                  distribution_name))
+for (i in 1:nrow(mat_out2)) {
+  temp_gof = raw_fit[[i]]
+  for (j in 1:ncol(mat_out2)) {
+    mat_out2[i, j] = as.numeric(temp_gof[j])
+  }
+}
+
+as.data.frame(mat_out2)
+```
+
+```{r}
+val_mat = as.data.frame(rbind(
+  cbind(rownames(fit_bingo_aloha),
+        c(rep("Bingo Aloha", 4)),
+        fit_bingo_aloha),
+  cbind(rownames(fit_homw),
+        c(rep("HOMW", 4)),
+        fit_homw),
+  cbind(rownames(fit_idle_mafia),
+        c(rep("Idle Mafia", 4)),
+        fit_idle_mafia),
+  cbind(rownames(fit_spongebob),
+        c(rep("Spongebob", 4)),
+        fit_spongebob),
+  cbind(rownames(fit_terra_genesis),
+        c(rep("Terra Genesis", 4)),
+        fit_terra_genesis),
+  cbind(rownames(fit_ultimex),
+        c(rep("Ultimate X-Poker", 4)),
+        fit_ultimex)
+))
+colnames(val_mat)[1:2] = c("distribution", "client")
+rownames(val_mat) = 1:nrow(val_mat)
+
+val_mat$aic  = as.numeric(as.character(val_mat$aic))
+val_mat$bic  = as.numeric(as.character(val_mat$bic))
+val_mat$chsq = as.numeric(as.character(val_mat$chsq))
+val_mat$ks   = as.numeric(as.character(val_mat$ks))
+
+write.csv(val_mat, "./goodness_of_fit_per_client_raw.csv")
+
+a = ggplot(
+  val_mat, aes(x = distribution, y = aic, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./aic_plot_all.png", plot = a,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+a
+
+b = ggplot(
+  val_mat, aes(x = distribution, y = bic, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./bic_plot_all.png", plot = b,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+b
+
+c = ggplot(
+  val_mat, aes(x = distribution, y = chsq, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./chsq_plot_all.png", plot = c,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+c
+
+d = ggplot(
+  val_mat, aes(x = distribution, y = ks, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./ks_plot_all.png", plot = d,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+d
+```
+
+## Same thing but with no scale parameter - so no exponential dist either:
+
+All five of the following distributions used are left skewed distributions with similar properties... So results are bound to be similar.
+
+```{r}
+distribution_name = c("lnorm", "weibull", "frechet", "loglogis", "burr")
+colours = c("purple", "darkgreen", "dodgerblue", "orange", "red")
+
+scale = 1
+fit_bingo_aloha   = get_dist(df_bingo_aloha$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_homw          = get_dist(df_homw$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_idle_mafia    = get_dist(df_idle_mafia$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_spongebob     = get_dist(df_spongebob$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_terra_genesis = get_dist(df_terra_genesis$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+fit_ultimex       = get_dist(df_ultimex$total_wins_spend/scale,
+                             distribution_name, colours, T, F, F)
+raw_fit = list(fit_bingo_aloha, fit_homw, fit_idle_mafia, fit_spongebob, fit_terra_genesis, fit_ultimex)
+
+mat_out2 = matrix(data = NA, nrow = 6, ncol = length(distribution_name),
+                  dimnames = list(c("Bingo Aloha",
+                                    "HOMW",
+                                    "Idle Mafia",
+                                    "Spongebob",
+                                    "Terra Genesis",
+                                    "Ultimate X-Poker"),
+                                  distribution_name))
+for (i in 1:nrow(mat_out2)) {
+  temp_gof = raw_fit[[i]]
+  for (j in 1:ncol(mat_out2)) {
+    mat_out2[i, j] = as.numeric(temp_gof[j])
+  }
+}
+
+as.data.frame(mat_out2)
+```
+
+```{r}
+val_mat = as.data.frame(rbind(
+  cbind(rownames(fit_bingo_aloha),
+        c(rep("Bingo Aloha", nrow(fit_bingo_aloha))),
+        fit_bingo_aloha),
+  cbind(rownames(fit_homw),
+        c(rep("HOMW", nrow(fit_homw))),
+        fit_homw),
+  cbind(rownames(fit_idle_mafia),
+        c(rep("Idle Mafia", nrow(fit_idle_mafia))),
+        fit_idle_mafia),
+  cbind(rownames(fit_spongebob),
+        c(rep("Spongebob", nrow(fit_spongebob))),
+        fit_spongebob),
+  cbind(rownames(fit_terra_genesis),
+        c(rep("Terra Genesis", nrow(fit_terra_genesis))),
+        fit_terra_genesis),
+  cbind(rownames(fit_ultimex),
+        c(rep("Ultimate X-Poker", nrow(fit_ultimex))),
+        fit_ultimex)
+))
+colnames(val_mat)[1:2] = c("distribution", "client")
+rownames(val_mat) = 1:nrow(val_mat)
+
+val_mat$aic  = as.numeric(as.character(val_mat$aic))
+val_mat$bic  = as.numeric(as.character(val_mat$bic))
+val_mat$chsq = as.numeric(as.character(val_mat$chsq))
+val_mat$ks   = as.numeric(as.character(val_mat$ks))
+
+#write.csv(val_mat, "./goodness_of_fit_per_client_raw.csv")
+
+a = ggplot(
+  val_mat, aes(x = distribution, y = aic, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./aic_plot_all.png", plot = a,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+a
+
+b = ggplot(
+  val_mat, aes(x = distribution, y = bic, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./bic_plot_all.png", plot = b,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+b
+
+c = ggplot(
+  val_mat, aes(x = distribution, y = chsq, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./chsq_plot_all.png", plot = c,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+c
+
+d = ggplot(
+  val_mat, aes(x = distribution, y = ks, fill = distribution)) +
+  geom_bar(stat = "identity",
+           position = "dodge") +
+  facet_wrap(~ client, 1, 6)
+#ggsave("./ks_plot_all.png", plot = d,
+#  width = 36, height = 10, units = "cm", scale = 1.5
+#)
+d
+```
