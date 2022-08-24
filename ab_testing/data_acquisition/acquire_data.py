@@ -1,7 +1,6 @@
 from abc import ABC
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from ab_testing.data_acquisition.data_acquisition_utils import read_or_query_and_save
 from ab_testing.data_acquisition.sql_queries.bingo_aloha_queries import (
