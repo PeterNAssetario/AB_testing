@@ -15,6 +15,7 @@ best_distribution = fit_dist.fit(bingo_aloha_data.loc[bingo_aloha_data[target_co
 result = ProduceResults()
 results = result.produce(best_distribution, bingo_aloha_data)
 
+print(f"For clinet {client} data follows {best_distribution} distribution.")
 print(f"Variant {results[0]['variant']} is the better one with probability {results[0]['prob_being_best']}.")
 print(f"For variant {results[0]['variant']} the expected loss is {results[0]['expected_loss']}.")
 print(f"Variant {results[1]['variant']} is the better one with probability {results[1]['prob_being_best']}.")
