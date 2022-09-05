@@ -7,7 +7,7 @@ from ab_testing.constants import DISTRIBUTIONS
 
 
 class FitDistribution:
-    def __init__(self, data_dir_str: str = "processed_data", fname: str = "distribution_fit"):
+    def __init__(self, fname: str, data_dir_str: str = "processed_data"):
         self.data_dir_path = Path(data_dir_str)
         self.fname = fname
 

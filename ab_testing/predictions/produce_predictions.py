@@ -29,10 +29,8 @@ class ProducePredictions:
 
         dfc["conversions"] = np.where(dfc[target_col] > 0, 1, 0)
 
-        df_P = dfc.loc[dfc["test_group"] == "P"]
-        df_C = dfc.loc[dfc["test_group"] == "C"]
-
-        assert len(df_P) + len(df_C) == len(dfc)
+        df_P = dfc.loc[(dfc["test_group"].str.lower() == "p") | (dfc["test_group"].str.lower() == "assetario")]
+        df_C = dfc.loc[(dfc["test_group"].str.lower() == "c") | (dfc["test_group"].str.lower() == "control")]
 
         test = BinaryDataTest()
 
@@ -43,10 +41,8 @@ class ProducePredictions:
 
     def _produce_results_lognorm_dist(self, df: pd.DataFrame) -> dict:
 
-        df_P = df.loc[df["test_group"] == "P"]
-        df_C = df.loc[df["test_group"] == "C"]
-
-        assert len(df_P) + len(df_C) == len(df)
+        df_P = df.loc[(df["test_group"].str.lower() == "p") | (df["test_group"].str.lower() == "assetario")]
+        df_C = df.loc[(df["test_group"].str.lower() == "c") | (df["test_group"].str.lower() == "control")]
 
         test = DeltaLognormalDataTest()
 

@@ -1,22 +1,54 @@
-from abc import ABC
 from pathlib import Path
 
 import pandas as pd
-from ab_testing.data_acquisition.data_acquisition_utils import read_or_query_and_save
-from ab_testing.data_acquisition.sql_queries.bingo_aloha_queries import (
+from ab_testing.constants import client_name
+from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
     query_bingo_aloha,
-    query_bingo_aloha_30,
+    query_homw,
+    query_idle_mafia,
+    query_knighthood,
+    query_spongebob,
+    query_terra_genesis,
+    query_ultimex,
 )
+from ml_lib.feature_store import configure_offline_feature_store
+from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
+
+configure_offline_feature_store(workgroup="development", catalog_name="production")
+
+queries_dict = {
+    "bingo_aloha": query_bingo_aloha,
+    "homw": query_homw,
+    "idle_mafia": query_idle_mafia,
+    "knighthood": query_knighthood,
+    "spongebob": query_spongebob,
+    "terra_genesis": query_terra_genesis,
+    "ultimex": query_ultimex,
+}
 
 
-class BaseDataAcquisition(ABC):
-    def __init__(self, data_dir_str: str, fname: str):
-        self.data_dir_path = Path(data_dir_str)
+class AcquireData:
+    def __init__(self, client: str, fname: str, data_dir_str: str = "raw_data"):
+        self.client = client
         self.fname = fname
+        self.data_dir_path = Path(data_dir_str)
 
-        data_dir_path = Path(data_dir_str)
-        if not data_dir_path.exists():
-            data_dir_path.mkdir(parents=True, exist_ok=True)
+        if not self.data_dir_path.exists():
+            self.data_dir_path.mkdir(parents=True, exist_ok=True)
+
+    def acquire_data(self) -> pd.DataFrame:
+
+        data = self._read_if_exists()
+
+        if data.empty:
+            if client_name in queries_dict.items():
+                data = FeatureStoreOfflineClient.run_athena_query_pandas(queries_dict[client_name])
+            else:
+                raise ValueError(f"Client name {client_name} not found.")
+
+        data.to_parquet(self.data_dir_path / self.fname)
+
+        return data
 
     def _read_if_exists(self) -> pd.DataFrame:
 
@@ -26,27 +58,3 @@ class BaseDataAcquisition(ABC):
             df = pd.DataFrame()
 
         return df
-
-
-class AcquireBingoALohaData(BaseDataAcquisition):
-    def __init__(self, data_dir_str: str = "raw_data", fname: str = "bingo_aloha_data.p"):
-        super().__init__(
-            data_dir_str=data_dir_str,
-            fname=fname,
-        )
-
-    def acquire_data(self) -> pd.DataFrame:
-
-        bingo_aloha_data = self._read_if_exists()
-
-        if bingo_aloha_data.empty:
-
-            bingo_aloha_data = read_or_query_and_save(
-                query_bingo_aloha,
-                self.data_dir_path,
-                "bingo_aloha_data.p",
-            )
-
-        bingo_aloha_data.to_parquet(self.data_dir_path / self.fname)
-
-        return bingo_aloha_data
