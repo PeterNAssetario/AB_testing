@@ -26,7 +26,6 @@ queries_dict = {
     "ultimex": query_ultimex,
 }
 
-
 class AcquireData:
     def __init__(self, client: str, fname: str, data_dir_str: str = "raw_data"):
         self.client = client
