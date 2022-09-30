@@ -1,8 +1,9 @@
+from typing import List
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import scipy.stats
+
 from ab_testing.constants import DISTRIBUTIONS
 
 
@@ -19,19 +20,14 @@ class FitDistribution:
 
         df = pd.DataFrame(columns=["distribution", "AIC", "BIC"])
 
-        dists = []
-        aic = []
-        bic = []
-
-        for com_dist in DISTRIBUTIONS:
-            dist = eval("scipy.stats." + com_dist)
+        dists: List[str] = []
+        aic: List[float] = []
+        bic: List[float] = []
+        for dist_name, dist in DISTRIBUTIONS.items():
             params = dist.fit(data[target].values)
-            # pdf_fitted = dist.pdf(data[target].values, *params)
-
-            logLik = np.sum(dist.logpdf(data["total_wins_spend"].values, *params))
-            k = len(params[:])
-            n = len(data["total_wins_spend"].values)
-            dists.append(com_dist)
+            logLik = np.sum(dist.logpdf(data[target].values, *params))
+            k, n = len(params), len(data)
+            dists.append(dist_name)
             aic.append(2 * k - 2 * logLik)
             bic.append(k * np.log(n) - 2 * logLik)
 

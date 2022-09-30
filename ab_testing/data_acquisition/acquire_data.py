@@ -1,20 +1,22 @@
 from pathlib import Path
 
 import pandas as pd
-from ab_testing.constants import client_name
-from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
-    query_bingo_aloha,
-    query_homw,
-    query_idle_mafia,
-    query_knighthood,
-    query_spongebob,
-    query_terra_genesis,
-    query_ultimex,
-)
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
 
-configure_offline_feature_store(workgroup="development", catalog_name="production")
+# from ab_testing.constants import client_name
+from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
+    query_homw,
+    query_ultimex,
+    query_spongebob,
+    query_idle_mafia,
+    query_knighthood,
+    query_bingo_aloha,
+    query_terra_genesis,
+)
+
+configure_offline_feature_store(workgroup="analytics")
+# configure_offline_feature_store(workgroup="development", catalog_name="production")
 
 queries_dict = {
     "bingo_aloha": query_bingo_aloha,
@@ -41,10 +43,12 @@ class AcquireData:
         data = self._read_if_exists()
 
         if data.empty:
-            if client_name in queries_dict.items():
-                data = FeatureStoreOfflineClient.run_athena_query_pandas(queries_dict[client_name])
+            if self.client in queries_dict.keys():
+                data = FeatureStoreOfflineClient.run_athena_query_pandas(
+                    queries_dict[self.client]
+                )
             else:
-                raise ValueError(f"Client name {client_name} not found.")
+                raise ValueError(f"Client name {self.client} not found.")
 
         data.to_parquet(self.data_dir_path / self.fname)
 
