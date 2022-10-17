@@ -31,13 +31,13 @@ Choose client to see the performance of their A/B test.
 
 option = st.selectbox(
     '',
-    ('Demo', 'Idle Mafia', 'Bingo Aloha', 'Spongebob', 'Terra Genesis', 'Ultimex', 'Knighthood', 'Heroes of Magic and War'),
+    ('Demo', 'Idle Mafia', 'Bingo Aloha', 'Spongebob', 'Terra Genesis', 'Ultimex', 'Knighthood', 'Heroes Magic War'),
     help = 'Which client would you like to view?',
     index = 0
 )
 client_map = {
     'Bingo Aloha':"bingo_aloha",
-    'Heroes of Magic and War':"homw",
+    'Heroes Magic War':"homw",
     'Idle Mafia':"idle_mafia",
     'Knighthood':"knighthood",
     'Spongebob':"spongebob",
@@ -63,10 +63,6 @@ if client_name:
         except:
             configure_offline_feature_store(workgroup="development", catalog_name="production")
             initial_data = FeatureStoreOfflineClient.run_athena_query_pandas(queries_dict[client_name])
-        
-        # Below doesnt work because of work group conflicts so above is workaround:
-        #acquire_initial_data = AcquireData(client=client_name, fname=f"{client_name}_data.p")
-        #initial_data = acquire_initial_data.acquire_data()
     
     st.markdown("### Data Preview")
     st.dataframe(initial_data.head())
@@ -93,7 +89,7 @@ if client_name:
         #    decide = st.radio(
         #        f"Is *{treatment}* Group B?",
         #        options=["Yes", "No"],
-        #        help=f"Select yes if this is group B (or the treatment group) from your test.\nThus, {control} is Group A.",
+        #        help=f"Select yes if this is group B (or the treatment group) from your test.\nThus, {control} is Group A (control).",
         #    )
         #    if decide == "No":
         #        control, treatment = treatment, control
@@ -125,7 +121,8 @@ if client_name:
         st.write("")
     with row0_col2:
         fit_dist = FitDistribution(fname=f"{client_name}_distribution_fit.p")
-        best_distribution = fit_dist.fit(initial_data.loc[initial_data[result_default] > 0], result_default)
+        best_distribution = fit_dist.fit(initial_data.loc[initial_data[result[0]] > 0], result[0])
+        
         st.write("")
         st.write("## Distribution Used (Best Fit):\n###", best_distribution)
         st.write("")
@@ -213,17 +210,17 @@ if client_name:
     )
 
     # Table1
-    output_df = pd.DataFrame(columns=["Metric", "Conversion", "Revenue"])
-    output_df["Metric"] = ["P( P > C)", "E( loss | P > C)", "E( loss | C > P)"]
+    output_df = pd.DataFrame(columns=["Metric", "Conversion", "ARPU"])
+    output_df["Metric"] = ["P(P > C)", "E(loss | P > C)", "E(loss | C > P)"]
     output_df["Conversion"] = [
-        "%.4f%%" % (results_conversion[0]["prob_being_best"] * 100),
-        "%.4f%%" % (results_conversion[0]["expected_loss"] * 100),
-        "%.4f%%" % (results_conversion[1]["expected_loss"] * 100),
+        "%.2f%%" % (results_conversion[0]["prob_being_best"] * 100),
+        "%.2f%%" % (results_conversion[0]["expected_loss"] * 100),
+        "%.2f%%" % (results_conversion[1]["expected_loss"] * 100),
     ]
     output_df["Revenue"] = [
-        "%.4f%%" % (results_revenue[0]["prob_being_best"] * 100),
-        "%.4f%%" % (results_revenue[0]["expected_loss"] * 100),
-        "%.4f%%" % (results_revenue[1]["expected_loss"] * 100),
+        "%.2f%%" % (results_revenue[0]["prob_being_best"] * 100),
+        "%.4f€" % (results_revenue[0]["expected_loss"]),
+        "%.4f€" % (results_revenue[1]["expected_loss"]),
     ]
     output_df = output_df.set_index('Metric')
     table1 = row3_col2.write(output_df)
