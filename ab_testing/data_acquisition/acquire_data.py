@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+
 from ab_testing.constants import client_name
 from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
     query_bingo_aloha,
@@ -10,6 +11,7 @@ from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
     query_spongebob,
     query_terra_genesis,
     query_ultimex,
+    query_terra_2,
 )
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
@@ -24,7 +26,9 @@ queries_dict = {
     "spongebob": query_spongebob,
     "terra_genesis": query_terra_genesis,
     "ultimex": query_ultimex,
+    "terra_2": query_terra_2,
 }
+
 
 class AcquireData:
     def __init__(self, client: str, fname: str, data_dir_str: str = "raw_data"):
@@ -37,15 +41,12 @@ class AcquireData:
 
     def acquire_data(self) -> pd.DataFrame:
 
-        data = self._read_if_exists()
-
-        if data.empty:
-            if client_name in queries_dict.items():
-                data = FeatureStoreOfflineClient.run_athena_query_pandas(queries_dict[client_name])
-            else:
-                raise ValueError(f"Client name {client_name} not found.")
-
-        data.to_parquet(self.data_dir_path / self.fname)
+        if client_name in queries_dict:
+            data = FeatureStoreOfflineClient.run_athena_query_pandas(
+                queries_dict[client_name]
+            )
+        else:
+            raise ValueError(f"Client name {client_name} not found.")
 
         return data
 
