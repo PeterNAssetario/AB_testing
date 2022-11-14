@@ -210,81 +210,95 @@ FROM t_out
 
 
 query_ultimex = """
-WITH first_logins     AS (
+WITH
+    first_logins     AS (
+        SELECT user_id
+             , MIN(meta_date) first_login
+        FROM etl__sparkgaming_vjv6s__ultimate_x_poker_rib6t.session_start logins
+        GROUP BY user_id
+        )
+
+  , login_stats      AS (
     SELECT user_id
-         , MIN(meta_date) first_login
-    FROM etl__sparkgaming_vjv6s__ultimate_x_poker_rib6t.session_start logins
+         , MAX(test_group)  AS test_group
+         , MIN(first_login) AS first_login
+    FROM etl__sparkgaming_vjv6s__ultimate_x_poker_rib6t.session_start
+             INNER JOIN console.clean_abtest
+                        USING (user_id)
+             LEFT JOIN  first_logins
+                        USING (user_id)
+    WHERE meta_company_id = 'sparkgaming-vjv6s'
+      AND meta_project_id = 'ultimate-x-poker-rib6t'
+      and session_start.meta_date >= (DATE ('2022-10-13'))
+       AND first_login >= (DATE ('2022-10-13'))
     GROUP BY user_id
     )
-   , targeted_offers  AS (
-    SELECT payments.user_id   user_id
-         , offer_type
-         , payments.meta_date meta_date
-         , payments.sum_value sum_value
-    FROM etl__sparkgaming_vjv6s__ultimate_x_poker_rib6t.purchase payments
-         LEFT JOIN console."sparkgaming_ultimate-x-poker_offer_store" offers
-                   ON (payments.event_params_item_id = offers.product_id)
+
+  , targeted_offers  AS (
+    SELECT payments.user_id        user_id
+         , SUM(payments.sum_value) sum_value
+    FROM etl__sparkgaming_vjv6s__ultimate_x_poker_rib6t.purchase          payments
+             LEFT JOIN console."sparkgaming_ultimate-x-poker_offer_store" offers
+                       ON (payments.event_params_item_id = offers.product_id)
+    WHERE 1 = 1
+      AND payments.meta_date >= (DATE ('2022-10-13'))
+      -- AND offer_type LIKE '%Coin%'
+    GROUP BY user_id
     )
-   , player_spend     AS (
+
+  , player_spend     AS (
     SELECT user_id
          , test_group
-         , offer_type
-         , meta_date
          , SUM(sum_value) spend
     FROM targeted_offers
-         INNER JOIN console.clean_abtest abtest USING (user_id)
-         LEFT JOIN first_logins USING (user_id)
-    WHERE (meta_company_id = 'sparkgaming-vjv6s')
-      AND (meta_project_id = 'ultimate-x-poker-rib6t')
+             INNER JOIN console.clean_abtest abtest
+                        USING (user_id)
+             INNER JOIN first_logins
+                        USING (user_id)
+    WHERE meta_company_id = 'sparkgaming-vjv6s'
+      AND meta_project_id = 'ultimate-x-poker-rib6t'
     GROUP BY user_id
            , test_group
-           , offer_type
-           , meta_date
     )
-   , filtered_players AS (
+
+  , filtered_players AS (
     SELECT user_id
          , test_group
-         , offer_type
-         , meta_date
-         , approx_percentile(spend, 9.9E-1) OVER (PARTITION BY meta_date, test_group) percentile
+         , approx_percentile(spend, 9.9E-1) OVER (partition BY test_group) percentile
     FROM player_spend
     )
-   , wins_spend_table AS (
+
+  , wins_spend_table AS (
     SELECT user_id
          , test_group
-         , offer_type
-         , meta_date
          , spend
-         , (CASE WHEN (spend > percentile) THEN percentile ELSE spend END) wins_spend
-    FROM (player_spend ps
-         INNER JOIN filtered_players USING (user_id, meta_date, test_group, offer_type))
+         , (CASE
+                WHEN (spend > percentile) THEN percentile
+                ELSE spend
+            END) wins_spend
+    FROM player_spend ps
+             INNER JOIN filtered_players
+                        USING (user_id, test_group)
     )
-   , login_stats      AS (
-    SELECT user_id
-         , meta_date
-         , test_group
-    FROM etl__sparkgaming_vjv6s__ultimate_x_poker_rib6t.session_start
-        INNER JOIN console.clean_abtest USING (user_id)
-        LEFT JOIN first_logins USING (user_id)
-    WHERE (meta_company_id = 'sparkgaming-vjv6s')
-      AND (meta_project_id = 'ultimate-x-poker-rib6t')
-      AND (first_login >= CURRENT_DATE - INTERVAL '32' DAY)
-    )
-   , t_out            AS (
+
+  , t_out            AS (
     SELECT user_id
          , test_group
-         , SUM(spend)      total_spend
-         , SUM(wins_spend) total_wins_spend
-    FROM login_stats                t1
-         LEFT JOIN wins_spend_table t2 USING (user_id, test_group)
+         , round(SUM(spend), 2)      total_spend
+         , round(SUM(wins_spend), 2) total_wins_spend
+    FROM login_stats                    t1
+             LEFT JOIN wins_spend_table t2
+                       USING (user_id, test_group)
     GROUP BY user_id
            , test_group
     )
+
 SELECT user_id
      , test_group
      , COALESCE(total_spend, 0)      total_spend
      , COALESCE(total_wins_spend, 0) total_wins_spend
 FROM t_out
+ORDER BY total_spend DESC
 """
 
 
@@ -421,61 +435,79 @@ FROM t_out
 
 
 query_homw = """
-WITH first_logins     AS (
+
+WITH
+
+    min_logins       AS (
+        SELECT user_id
+             , MIN(meta_date) AS min_login
+        FROM etl__tinysoft_a9kwp__heroes_magic_war_h2sln.session_start log
+        GROUP BY 1
+        )
+
+  , logins           AS (
     SELECT user_id
-         , MIN(meta_date) first_login
-    FROM etl__tinysoft_a9kwp__heroes_magic_war_h2sln.session_start logins
-    GROUP BY user_id
-    )
-   , logins           AS (
-    SELECT user_id
-         , log.meta_date
-         , ab.test_group
+         , test_group
     FROM etl__tinysoft_a9kwp__heroes_magic_war_h2sln.session_start log
-         LEFT JOIN console.clean_abtest                            ab USING (user_id)
-         LEFT JOIN first_logins                                    fl USING (user_id)
-    WHERE meta_company_id = 'tinysoft-a9kwp'
-      AND meta_project_id = 'heroes-magic-war-h2sln'
-      AND first_login >= CURRENT_DATE - INTERVAL '32' DAY
+             LEFT JOIN (
+                           SELECT user_id
+                                , MAX(test_group) AS test_group
+                           FROM console.clean_abtest
+                           WHERE meta_company_id = 'tinysoft-a9kwp'
+                             AND meta_project_id = 'heroes-magic-war-h2sln'
+                           GROUP BY user_id
+                           )
+                       USING (user_id)
+    WHERE 1 = 1
+      AND meta_date >= (DATE ('2022-09-23'))
+      AND user_id NOT IN ('0000-0000', '00000000-0000-0000-0000-000000000000')
     GROUP BY user_id
-           , log.meta_date
            , test_group
     )
-   , purchases        AS (
+  , purchases        AS (
     SELECT user_id
          , SUM(sum_in_app_purchase_event_value_in_usd) spend
          , MAX(test_group)                             test_group
-         , meta_date
     FROM etl__tinysoft_a9kwp__heroes_magic_war_h2sln.in_app_purchase
-         LEFT JOIN console.clean_abtest ab USING (user_id)
-    WHERE meta_company_id = 'tinysoft-a9kwp'
-      AND meta_project_id = 'heroes-magic-war-h2sln'
+             LEFT JOIN (
+                           SELECT user_id
+                                , MAX(test_group) AS test_group
+                           FROM console.clean_abtest
+                           WHERE meta_company_id = 'tinysoft-a9kwp'
+                             AND meta_project_id = 'heroes-magic-war-h2sln'
+                           GROUP BY user_id
+                           )
+                       USING (user_id)
+    WHERE 1 = 1
+      AND meta_date >= (DATE ('2022-09-23'))
     GROUP BY user_id
-           , meta_date
     )
-   , filtered_players AS (
+  , filtered_players AS (
     SELECT test_group
          , user_id
-         , meta_date
-         , approx_percentile(spend, 9.9E-1) OVER (PARTITION BY meta_date, test_group) percentile
+         , approx_percentile(spend, 9.9E-1) OVER (partition BY test_group) percentile
     FROM purchases
     )
-   , wins_spend_table AS (
+  , wins_spend_table AS (
     SELECT user_id
-         , meta_date
          , filtered_players.test_group
          , spend
          , (CASE WHEN (spend > percentile) THEN percentile ELSE spend END) wins_spend
     FROM purchases ps
-         INNER JOIN filtered_players USING (user_id, meta_date)
+             INNER JOIN filtered_players
+                        USING (user_id)
     )
-   , t_out            AS (
+  , t_out            AS (
     SELECT user_id
          , test_group
          , SUM(spend)      total_spend
          , SUM(wins_spend) total_wins_spend
     FROM logins
-         LEFT JOIN wins_spend_table USING (user_id, test_group)
+             LEFT JOIN wins_spend_table
+                       USING (user_id, test_group)
+             LEFT JOIN min_logins
+                       USING (user_id)
+    WHERE min_login >= (DATE ('2022-09-23'))
     GROUP BY user_id
            , test_group
     )
@@ -484,5 +516,88 @@ SELECT user_id
      , COALESCE(total_spend, 0)      total_spend
      , COALESCE(total_wins_spend, 0) total_wins_spend
 FROM t_out
-ORDER BY user_id
+ORDER BY total_spend DESC
+"""
+
+
+query_terra_2 = """
+WITH
+    test   AS (
+        SELECT account_id
+             , experiment_id
+             , CASE
+                   WHEN experiment_variant_id LIKE '5830%' THEN 'C'
+                   WHEN experiment_variant_id LIKE '5580%' THEN 'P'
+                   ELSE 'other'
+               END AS test_group
+        FROM (
+                 SELECT account_id
+                      , experiment_id
+                      , experiment_variant_id
+                      , meta_date
+                      , rank() over (partition BY account_id ORDER BY meta_date DESC) AS rank_
+                 FROM etl__tilting_point_mjs4k__terragenesis_m89uz.experiments
+                 WHERE 1 = 1
+                   AND experiment_id = '5133572907270144'
+                   AND meta_date >= (DATE ('2022-07-05'))
+                 )
+        WHERE rank_ = 1
+        )
+
+  , logins AS (
+    SELECT *
+         , CASE
+               WHEN min_date BETWEEN (DATE ( '2022-07-05')) AND (DATE ( '2022-07-11')) THEN '1'
+               WHEN min_date BETWEEN (DATE ( '2022-07-13')) AND (DATE ( '2022-07-23')) THEN '2'
+               WHEN min_date BETWEEN (DATE ( '2022-07-25')) AND (DATE ( '2022-08-07')) THEN '3'
+               WHEN min_date BETWEEN (DATE ( '2022-08-09')) AND (DATE ( '2022-08-17')) THEN '4_broken_control'
+               WHEN min_date BETWEEN (DATE ('2022-08-19')) AND (DATE ( '2022-09-01'))  THEN '5'
+               WHEN min_date >= (DATE ('2022-09-03'))                                  THEN '6'
+               ELSE '0'
+           END AS cohort
+    FROM (
+             SELECT account_id
+                  , MIN(meta_date) AS min_date
+             FROM etl__tilting_point_mjs4k__terragenesis_m89uz.session_start
+             GROUP BY account_id
+             )
+    WHERE 1 = 1
+      AND min_date >= (DATE ('2022-07-05'))
+    )
+
+  , spend  AS (
+    SELECT account_id
+         , SUM(sum_value) AS sum_spend
+    FROM etl__tilting_point_mjs4k__terragenesis_m89uz.purchase
+    WHERE 1 = 1
+      AND meta_date >= (DATE ('2022-07-05'))
+    GROUP BY account_id
+    )
+
+  , preds  AS (
+    SELECT MAX(CAST(json_extract(metadata, '$.region_tier') AS VARCHAR))    AS region_tier
+         , MAX(CAST(json_extract(metadata, '$.device_tier') AS VARCHAR))    AS device_tier
+         , MAX(predicted_value)                                             AS pred_value
+         , MAX(CAST(json_extract(metadata, '$.prediction_tag') AS VARCHAR)) AS tag
+         , user_id                                                          AS account_id
+    FROM platform__tilting_point_mjs4k__terragenesis_m89uz.prediction_logs
+    WHERE 1 = 1
+    GROUP BY user_id
+    )
+
+SELECT test_group
+     , account_id AS user_id
+     , coalesce(sum_spend,0)  AS total_spend
+     , coalesce(sum_spend,0)  AS total_wins_spend
+FROM test
+         INNER JOIN logins
+                    USING (account_id)
+         INNER JOIN preds
+                    USING (account_id)
+         LEFT JOIN  spend
+                    USING (account_id)
+WHERE 1 = 1
+  AND tag = 'apple_success_prediction'
+  AND cohort IN ('4_broken_control', '5', '6')
+;
 """
