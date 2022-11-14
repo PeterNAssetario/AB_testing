@@ -22,15 +22,23 @@ class ProducePredictions:
         if distribution == "lognorm":
             return self._produce_results_lognorm_dist(df)
         else:
-            raise NotImplementedError("Results for given distribution are not implemented yet.")
+            raise NotImplementedError(
+                "Results for given distribution are not implemented yet."
+            )
 
     def produce_results_conversion(self, df: pd.DataFrame) -> dict:
         dfc = df.copy()
 
         dfc["conversions"] = np.where(dfc[target_col] > 0, 1, 0)
 
-        df_P = dfc.loc[(dfc["test_group"].str.lower() == "p") | (dfc["test_group"].str.lower() == "assetario")]
-        df_C = dfc.loc[(dfc["test_group"].str.lower() == "c") | (dfc["test_group"].str.lower() == "control")]
+        df_P = dfc.loc[
+            (dfc["test_group"].str.lower() == "p")
+            | (dfc["test_group"].str.lower() == "assetario")
+        ]
+        df_C = dfc.loc[
+            (dfc["test_group"].str.lower() == "c")
+            | (dfc["test_group"].str.lower() == "control")
+        ]
 
         test = BinaryDataTest()
 
@@ -41,8 +49,14 @@ class ProducePredictions:
 
     def _produce_results_lognorm_dist(self, df: pd.DataFrame) -> dict:
 
-        df_P = df.loc[(df["test_group"].str.lower() == "p") | (df["test_group"].str.lower() == "assetario")]
-        df_C = df.loc[(df["test_group"].str.lower() == "c") | (df["test_group"].str.lower() == "control")]
+        df_P = df.loc[
+            (df["test_group"].str.lower() == "p")
+            | (df["test_group"].str.lower() == "assetario")
+        ]
+        df_C = df.loc[
+            (df["test_group"].str.lower() == "c")
+            | (df["test_group"].str.lower() == "control")
+        ]
 
         test = DeltaLognormalDataTest()
 
@@ -51,10 +65,15 @@ class ProducePredictions:
 
         return test.evaluate(seed=42)
 
-    
     def _produce_results_lognorm_dist_carry_value(self, df: pd.DataFrame) -> list:
-        df_P = df.loc[(df["test_group"].str.lower() == "p") | (df["test_group"].str.lower() == "assetario")]
-        df_C = df.loc[(df["test_group"].str.lower() == "c") | (df["test_group"].str.lower() == "control")]
+        df_P = df.loc[
+            (df["test_group"].str.lower() == "p")
+            | (df["test_group"].str.lower() == "assetario")
+        ]
+        df_C = df.loc[
+            (df["test_group"].str.lower() == "c")
+            | (df["test_group"].str.lower() == "control")
+        ]
 
         test = DeltaLognormalDataTest()
 
