@@ -38,7 +38,9 @@ class BinaryDataTest(BaseDataTest):
     def b_priors(self):
         return [self.data[k]["b_prior"] for k in self.data]
 
-    def eval_simulation(self, sim_count: int = 20000, seed: int = None) -> Tuple[dict, dict]:
+    def eval_simulation(
+        self, sim_count: int = 20000, seed: int = None
+    ) -> Tuple[dict, dict]:
         """
         Calculate probabilities of being best and expected loss for a current class state.
 
@@ -81,11 +83,20 @@ class BinaryDataTest(BaseDataTest):
             "prob_being_best",
             "expected_loss",
         ]
-        positive_rate = [round(i[0] / i[1], 5) for i in zip(self.positives, self.totals)]
+        positive_rate = [
+            round(i[0] / i[1], 5) for i in zip(self.positives, self.totals)
+        ]
         eval_pbbs, eval_loss = self.eval_simulation(sim_count, seed)
         pbbs = list(eval_pbbs.values())
         loss = list(eval_loss.values())
-        data = [self.variant_names, self.totals, self.positives, positive_rate, pbbs, loss]
+        data = [
+            self.variant_names,
+            self.totals,
+            self.positives,
+            positive_rate,
+            pbbs,
+            loss,
+        ]
         res = [dict(zip(keys, item)) for item in zip(*data)]
 
         return res
@@ -122,9 +133,13 @@ class BinaryDataTest(BaseDataTest):
         if a_prior <= 0 or b_prior <= 0:
             raise ValueError("Both [a_prior, b_prior] have to be positive numbers.")
         if totals <= 0:
-            raise ValueError("Input variable 'totals' is expected to be positive integer.")
+            raise ValueError(
+                "Input variable 'totals' is expected to be positive integer."
+            )
         if positives < 0:
-            raise ValueError("Input variable 'positives' is expected to be non-negative integer.")
+            raise ValueError(
+                "Input variable 'positives' is expected to be non-negative integer."
+            )
         if totals < positives:
             raise ValueError("Not possible to have more positives that totals!")
 
