@@ -81,7 +81,7 @@ def normal_posteriors(
     a_post = prior_a + (total / 2)
     b_post = (
         prior_b
-        + (1 / 2) * (sums_2 - 2 * sums * x_bar + total * (x_bar ** 2))
+        + (1 / 2) * (sums_2 - 2 * sums * x_bar + total * (x_bar**2))
         + ((total * prior_w) / (2 * (total + prior_w))) * ((x_bar - prior_m) ** 2)
     )
 

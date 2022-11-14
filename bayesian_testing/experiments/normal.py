@@ -52,7 +52,9 @@ class NormalDataTest(BaseDataTest):
     def w_priors(self):
         return [self.data[k]["w_prior"] for k in self.data]
 
-    def eval_simulation(self, sim_count: int = 20000, seed: int = None) -> Tuple[dict, dict]:
+    def eval_simulation(
+        self, sim_count: int = 20000, seed: int = None
+    ) -> Tuple[dict, dict]:
         """
         Calculate probabilities of being best and expected loss for a current class state.
 
@@ -156,9 +158,13 @@ class NormalDataTest(BaseDataTest):
         if not isinstance(name, str):
             raise ValueError("Variant name has to be a string.")
         if m_prior < 0 or a_prior_ig < 0 or b_prior_ig < 0 or w_prior < 0:
-            raise ValueError("All priors of [m, a_ig, b_ig, w] have to be non-negative numbers.")
+            raise ValueError(
+                "All priors of [m, a_ig, b_ig, w] have to be non-negative numbers."
+            )
         if totals <= 0:
-            raise ValueError("Input variable 'totals' is expected to be positive integer.")
+            raise ValueError(
+                "Input variable 'totals' is expected to be positive integer."
+            )
 
         if name not in self.variant_names:
             self.data[name] = {

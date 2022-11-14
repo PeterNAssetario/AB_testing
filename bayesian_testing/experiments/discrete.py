@@ -48,7 +48,9 @@ class DiscreteDataTest(BaseDataTest):
                 res = False
         return res
 
-    def eval_simulation(self, sim_count: int = 20000, seed: int = None) -> Tuple[dict, dict]:
+    def eval_simulation(
+        self, sim_count: int = 20000, seed: int = None
+    ) -> Tuple[dict, dict]:
         """
         Calculate probabilities of being best and expected loss for a current class state.
 
@@ -83,7 +85,13 @@ class DiscreteDataTest(BaseDataTest):
         -------
         res : List of dictionaries with results per variant.
         """
-        keys = ["variant", "concentration", "average_value", "prob_being_best", "expected_loss"]
+        keys = [
+            "variant",
+            "concentration",
+            "average_value",
+            "prob_being_best",
+            "expected_loss",
+        ]
         eval_pbbs, eval_loss = self.eval_simulation(sim_count, seed)
         pbbs = list(eval_pbbs.values())
         loss = list(eval_loss.values())
@@ -133,7 +141,9 @@ class DiscreteDataTest(BaseDataTest):
             )
             raise ValueError(msg)
         if not self.check_if_numerical(concentration):
-            raise ValueError("Concentration parameter has to be a list of integer values.")
+            raise ValueError(
+                "Concentration parameter has to be a list of integer values."
+            )
 
         if not prior:
             prior = [1] * len(self.states)
@@ -183,7 +193,8 @@ class DiscreteDataTest(BaseDataTest):
             raise ValueError("Data of added variant needs to have some observations.")
         if not min([i in self.states for i in data]):
             msg = (
-                "Input data needs to be a list of numbers from possible states: " f"{self.states}."
+                "Input data needs to be a list of numbers from possible states: "
+                f"{self.states}."
             )
             raise ValueError(msg)
 
