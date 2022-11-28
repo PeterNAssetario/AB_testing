@@ -7,11 +7,15 @@ from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
     query_bingo_aloha,
     query_homw,
     query_idle_mafia,
-    query_knighthood,
     query_spongebob,
     query_terra_genesis,
     query_ultimex,
-    query_terra_2,
+    query_bingo_aloha_small,
+    query_homw_small,
+    query_idle_mafia_small,
+    query_spongebob_small,
+    query_terra_genesis_small,
+    query_ultimex_small,
 )
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
@@ -22,11 +26,15 @@ queries_dict = {
     "bingo_aloha": query_bingo_aloha,
     "homw": query_homw,
     "idle_mafia": query_idle_mafia,
-    "knighthood": query_knighthood,
     "spongebob": query_spongebob,
     "terra_genesis": query_terra_genesis,
     "ultimex": query_ultimex,
-    "terra_2": query_terra_2,
+    "bingo_aloha_small": query_bingo_aloha_small,
+    "homw_small": query_homw_small,
+    "idle_mafia_small": query_idle_mafia_small,
+    "spongebob_small": query_spongebob_small,
+    "terra_genesis_small": query_terra_genesis_small,
+    "ultimex_small": query_ultimex_small,
 }
 
 
