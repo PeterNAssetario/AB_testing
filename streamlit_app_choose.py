@@ -37,8 +37,8 @@ Choose client to see the performance of their A/B test.
 option = st.selectbox(
     "",
     (
-        "Spongebob",
         "Idle Mafia",
+        "Spongebob",
         "Bingo Aloha",
         "Terra Genesis",
         "Ultimex",
@@ -59,6 +59,7 @@ client_map = {
 client_name = client_map[option]
 ab_default = 'test_group'
 result_default = 'total_wins_spend'
+spend_default = 'personalised'
 
 if client_name:
     try:
@@ -78,7 +79,7 @@ if client_name:
 
     st.markdown("### Select Analysis Options")
     with st.form(key="my_form"):
-        set1_col1, set1_col2 = st.columns(2)
+        set1_col1, set1_col2, set1_col3 = st.columns(3)
         with set1_col1:
             ab = st.multiselect(
                 "A/B Column",
@@ -93,6 +94,15 @@ if client_name:
                 help="Select which column shows results of A/B test.",
                 default=result_default,
             )
+        if client_name not in ["spongebob", "terra_genesis"]:
+            with set1_col3:
+                spend_type = st.multiselect(
+                    "Spend Type",
+                    options=['personalised','non-personalised'],
+                    help="Select what type of spend you wish to analyse, select both for both.",
+                    default=spend_default,
+                )
+        else: spend_type = []
         
         min_date_val = initial_data.meta_date.min()
         max_date_val = initial_data.meta_date.max()
@@ -155,13 +165,15 @@ if client_name:
             )
 
         submit_button = st.form_submit_button(label="Submit")
-
-        
+    
     if submit_button:
         if not ab or not result:
             st.warning("Please select both an **A/B column** and a **Result column**.")
             st.stop()
         
+        if len(spend_type) in [0,2]: spend_type = 9
+        elif spend_type[0] == 'personalised': spend_type = 0
+        elif spend_type[0] == 'non-personalised': spend_type = 1
         client_name_small = client_name + '_small'
         initial_data = FeatureStoreOfflineClient.run_athena_query_pandas(
             queries_dict[client_name_small],
@@ -170,6 +182,7 @@ if client_name:
                 'end_date':str(end_date)[0:10],
                 'strt_fl':str(start_fl)[0:10],
                 'end_fl':str(end_fl)[0:10],
+                'spend_type':int(spend_type),
             },
         )
 

@@ -26,6 +26,7 @@ SELECT user_id
 FROM analytics__century_games_ncmgu__bingo_aloha_r3g9v.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
+  AND fl_personalized_offer_spend <> %(spend_type)s
 GROUP BY user_id
        , group_tag;
 """
@@ -122,6 +123,7 @@ SELECT user_id
 FROM analytics__sparkgaming_vjv6s__ultimate_x_poker_rib6t.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
+  AND fl_personalized_offer_spend <> %(spend_type)s
 GROUP BY user_id
        , group_tag;
 """
@@ -154,6 +156,7 @@ SELECT user_id
 FROM analytics__sparkgaming_vjv6s__ultimate_x_poker_rib6t.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
+  AND fl_personalized_offer_spend <> %(spend_type)s
 GROUP BY user_id
        , group_tag;
 """
@@ -169,10 +172,10 @@ SELECT user_id
      , COALESCE(SUM(spend), 0)      total_spend
      , COALESCE(SUM(wins_spend), 0) total_wins_spend
 FROM (
-     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os
+     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os, fl_personalized_offer_spend
      FROM analytics__century_games_ncmgu__idle_mafia_ecbqb.user_level_performance_before_1_6_2022
      UNION
-     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os
+     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os, fl_personalized_offer_spend
      FROM analytics__century_games_ncmgu__idle_mafia_ecbqb.user_level_performance_after_1_6_2022
      )
 GROUP BY user_id
@@ -190,14 +193,15 @@ SELECT user_id
      , COALESCE(SUM(spend), 0)      total_spend
      , COALESCE(SUM(wins_spend), 0) total_wins_spend
 FROM (
-     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os
+     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os, fl_personalized_offer_spend
      FROM analytics__century_games_ncmgu__idle_mafia_ecbqb.user_level_performance_before_1_6_2022
      UNION
-     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os
+     SELECT user_id, meta_date, first_login, spend, wins_spend, group_tag, os, fl_personalized_offer_spend
      FROM analytics__century_games_ncmgu__idle_mafia_ecbqb.user_level_performance_after_1_6_2022
      )
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
+  AND fl_personalized_offer_spend <> %(spend_type)s
 GROUP BY user_id
        , group_tag;
 """
