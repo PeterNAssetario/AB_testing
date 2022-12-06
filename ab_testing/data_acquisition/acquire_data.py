@@ -3,13 +3,17 @@ from pathlib import Path
 import pandas as pd
 
 from ab_testing.constants import client_name
+
+from ml_lib.feature_store import configure_offline_feature_store
+from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
+
 from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
-    query_bingo_aloha,
     query_homw,
-    query_idle_mafia,
-    query_spongebob,
-    query_terra_genesis,
     query_ultimex,
+    query_spongebob,
+    query_idle_mafia,
+    query_terra_genesis,
+    query_bingo_aloha,
     query_bingo_aloha_small,
     query_homw_small,
     query_idle_mafia_small,
@@ -17,10 +21,9 @@ from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
     query_terra_genesis_small,
     query_ultimex_small,
 )
-from ml_lib.feature_store import configure_offline_feature_store
-from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
 
-configure_offline_feature_store(workgroup="development", catalog_name="production")
+configure_offline_feature_store(workgroup="analytics")
+# configure_offline_feature_store(workgroup="development", catalog_name="production")
 
 queries_dict = {
     "bingo_aloha": query_bingo_aloha,
@@ -48,13 +51,15 @@ class AcquireData:
             self.data_dir_path.mkdir(parents=True, exist_ok=True)
 
     def acquire_data(self) -> pd.DataFrame:
-
-        if client_name in queries_dict:
-            data = FeatureStoreOfflineClient.run_athena_query_pandas(
-                queries_dict[client_name]
-            )
-        else:
-            raise ValueError(f"Client name {client_name} not found.")
+        data = self._read_if_exists()
+        if data.empty:
+            if self.client in queries_dict.keys():
+                data = FeatureStoreOfflineClient.run_athena_query_pandas(
+                    queries_dict[self.client]
+                )
+            else:
+                raise ValueError(f"Client name {self.client} not found.")
+        data.to_parquet(self.data_dir_path / self.fname)
 
         return data
 

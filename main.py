@@ -1,12 +1,12 @@
-import pandas as pd
-
-from ab_testing.constants import client_name, target_col
+from ab_testing.constants import target_col, client_name
+from ab_testing.general_utils import generate_output_dataframe
 from ab_testing.data_acquisition.acquire_data import AcquireData
-from ab_testing.distribution_fit.fit_distribution import FitDistribution
 from ab_testing.predictions.produce_predictions import ProducePredictions
+from ab_testing.distribution_fit.fit_distribution import FitDistribution
 
 acquire_initial_data = AcquireData(client=client_name, fname=f"{client_name}_data.p")
 initial_data = acquire_initial_data.acquire_data()
+
 
 fit_dist = FitDistribution(fname=f"{client_name}_distribution_fit.p")
 best_distribution = fit_dist.fit(

@@ -1,16 +1,20 @@
-from typing import Literal
+from typing import Dict, Union, Literal
 
-DISTRIBUTIONS: list = ["expon", "lognorm"]
+from scipy import stats
 
-# To-do: this actually never propagates correctly into calculating distributions
+ScipyDists = Union[
+    stats._continuous_distns.expon_gen, stats._continuous_distns.lognorm_gen
+]
+
+DISTRIBUTIONS: Dict[str, ScipyDists] = {"expon": stats.expon, "lognorm": stats.lognorm}
+
+
 target_col: str = "total_wins_spend"
 client_name: Literal[
     "bingo_aloha",
     "terra_genesis",
     "spongebob",
     "ultimex",
-    "knighthood",
     "idle_mafia",
     "homw",
-    "terra_2",
-] = "ultimex"
+] = "idle_mafia"

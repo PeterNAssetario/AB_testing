@@ -11,3 +11,9 @@ Run main.py to get the results for chosen client, Bernoulli distribution for con
 A. Data acquisition - implemented for all existing clients.
 B. Distribution fit - Bernoulli distribution for the conversions and lognormal distribution for the revenues.
 C. Produce predictions - probability for the P being the best with the expected losses in both cases for conversions and revenue.
+
+External sources:
+Visualisation PoC via streamlit python extension app done by Peter Novak:
+https://peternassetario-demo-repo-streamlit-app-pnovstreamlit2-mzfyln.streamlitapp.com/ 
+source code for the page (has to be in public repo for free version of streamlit):
+https://github.com/PeterNAssetario/demo-repo/blob/pnov/streamlit2/streamlit_app.py
