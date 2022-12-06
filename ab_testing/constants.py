@@ -8,13 +8,13 @@ ScipyDists = Union[
 
 DISTRIBUTIONS: Dict[str, ScipyDists] = {"expon": stats.expon, "lognorm": stats.lognorm}
 
+
 target_col: str = "total_wins_spend"
 client_name: Literal[
     "bingo_aloha",
     "terra_genesis",
     "spongebob",
     "ultimex",
-    "knighthood",
     "idle_mafia",
     "homw",
-] = "bingo_aloha"
+] = "idle_mafia"

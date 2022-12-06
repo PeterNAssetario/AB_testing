@@ -17,9 +17,18 @@ result = ProducePredictions()
 results_conversion = result.produce_results_conversion(initial_data)
 results_revenue = result.produce_results_revenue(best_distribution, initial_data)
 
-output_df = generate_output_dataframe(
-    results_conversion=results_conversion, results_revenue=results_revenue
-)
+output_df = pd.DataFrame(columns=["Metric", "Conversion", "Revenue"])
+output_df["Metric"] = ["P( P > C)", "E( loss | P > C)", "E( loss | C > P)"]
+output_df["Conversion"] = [
+    results_conversion[0]["prob_being_best"],
+    results_conversion[0]["expected_loss"],
+    results_conversion[1]["expected_loss"],
+]
+output_df["Revenue"] = [
+    results_revenue[0]["prob_being_best"],
+    results_revenue[0]["expected_loss"],
+    results_revenue[1]["expected_loss"],
+]
 
 print(f"For client {client_name} data follows {best_distribution} distribution.")
 print(output_df)

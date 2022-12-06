@@ -1,18 +1,25 @@
 from pathlib import Path
 
 import pandas as pd
+
+from ab_testing.constants import client_name
+
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
 
-# from ab_testing.constants import client_name
 from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
     query_homw,
     query_ultimex,
     query_spongebob,
     query_idle_mafia,
-    query_knighthood,
-    query_bingo_aloha,
     query_terra_genesis,
+    query_bingo_aloha,
+    query_bingo_aloha_small,
+    query_homw_small,
+    query_idle_mafia_small,
+    query_spongebob_small,
+    query_terra_genesis_small,
+    query_ultimex_small,
 )
 
 configure_offline_feature_store(workgroup="analytics")
@@ -22,10 +29,15 @@ queries_dict = {
     "bingo_aloha": query_bingo_aloha,
     "homw": query_homw,
     "idle_mafia": query_idle_mafia,
-    "knighthood": query_knighthood,
     "spongebob": query_spongebob,
     "terra_genesis": query_terra_genesis,
     "ultimex": query_ultimex,
+    "bingo_aloha_small": query_bingo_aloha_small,
+    "homw_small": query_homw_small,
+    "idle_mafia_small": query_idle_mafia_small,
+    "spongebob_small": query_spongebob_small,
+    "terra_genesis_small": query_terra_genesis_small,
+    "ultimex_small": query_ultimex_small,
 }
 
 
@@ -39,9 +51,7 @@ class AcquireData:
             self.data_dir_path.mkdir(parents=True, exist_ok=True)
 
     def acquire_data(self) -> pd.DataFrame:
-
         data = self._read_if_exists()
-
         if data.empty:
             if self.client in queries_dict.keys():
                 data = FeatureStoreOfflineClient.run_athena_query_pandas(
@@ -49,7 +59,6 @@ class AcquireData:
                 )
             else:
                 raise ValueError(f"Client name {self.client} not found.")
-
         data.to_parquet(self.data_dir_path / self.fname)
 
         return data

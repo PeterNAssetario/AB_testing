@@ -19,7 +19,6 @@ class FitDistribution:
     def fit(self, data: pd.DataFrame, target: str) -> str:
 
         df = pd.DataFrame(columns=["distribution", "AIC", "BIC"])
-
         dists: List[str] = []
         aic: List[float] = []
         bic: List[float] = []
