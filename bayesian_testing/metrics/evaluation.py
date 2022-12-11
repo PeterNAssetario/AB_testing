@@ -1,3 +1,4 @@
+import pdb
 from numbers import Number
 from typing import List, Tuple, Union
 
@@ -5,9 +6,9 @@ import numpy as np
 
 from bayesian_testing.metrics.posteriors import (
     beta_posteriors_all,
+    dirichlet_posteriors,
     lognormal_posteriors,
     normal_posteriors,
-    dirichlet_posteriors,
 )
 from bayesian_testing.utilities import get_logger
 
@@ -19,7 +20,9 @@ def validate_bernoulli_input(totals: List[int], positives: List[int]) -> None:
     Simple validation for pbb_bernoulli_agg inputs.
     """
     if len(totals) != len(positives):
-        msg = f"Totals ({totals}) and positives ({positives}) needs to have same length!"
+        msg = (
+            f"Totals ({totals}) and positives ({positives}) needs to have same length!"
+        )
         logger.error(msg)
         raise ValueError(msg)
 
@@ -60,6 +63,26 @@ def estimate_expected_loss(data: Union[List[List[Number]], np.ndarray]) -> List[
     """
     max_values = np.max(data, axis=0)
     res = list(np.mean(max_values - data, axis=1).round(7))
+    return res
+
+
+# TODO: For now this only works for the case of two variants and not more
+def estimate_expected_total_gain(
+    data: Union[List[List[Number]], np.ndarray]
+) -> List[float]:
+    """
+    Estimate expected total gain for variants considering simulated data from respective posteriors.
+
+    Parameters
+    ----------
+    data : List of simulated data for each variant.
+
+    Returns
+    -------
+    res : List of expected total gains for each variant.
+    """
+    #pdb.set_trace()
+    res = list(np.mean(data - data[[1, 0], :], axis=1).round(7))
     return res
 
 
@@ -106,8 +129,9 @@ def eval_bernoulli_agg(
 
     res_pbbs = estimate_probabilities(beta_samples)
     res_loss = estimate_expected_loss(beta_samples)
+    res_total_gain = estimate_expected_total_gain(beta_samples)
 
-    return res_pbbs, res_loss
+    return res_pbbs, res_loss, res_total_gain
 
 
 def eval_normal_agg(
@@ -178,8 +202,9 @@ def eval_normal_agg(
 
     res_pbbs = estimate_probabilities(normal_samples)
     res_loss = estimate_expected_loss(normal_samples)
+    res_total_gain = estimate_expected_total_gain(normal_samples)
 
-    return res_pbbs, res_loss
+    return res_pbbs, res_loss, res_total_gain
 
 
 def eval_delta_lognormal_agg(
@@ -271,8 +296,9 @@ def eval_delta_lognormal_agg(
 
         res_pbbs = estimate_probabilities(combined_samples)
         res_loss = estimate_expected_loss(combined_samples)
+        res_total_gain = estimate_expected_total_gain(combined_samples)
 
-        return res_pbbs, res_loss, combined_samples
+    return res_pbbs, res_loss, combined_samples, res_total_gain
 
 
 def eval_numerical_dirichlet_agg(

@@ -89,7 +89,7 @@ class DeltaLognormalDataTest(BaseDataTest):
         res_pbbs : Dictionary with probabilities of being best for all variants in experiment.
         res_loss : Dictionary with expected loss for all variants in experiment.
         """
-        pbbs, loss, posterior_samples = eval_delta_lognormal_agg(
+        pbbs, loss, posterior_samples, total_gain = eval_delta_lognormal_agg(
             self.totals,
             self.positives,
             self.sum_logs,
@@ -105,8 +105,9 @@ class DeltaLognormalDataTest(BaseDataTest):
         )
         res_pbbs = dict(zip(self.variant_names, pbbs))
         res_loss = dict(zip(self.variant_names, loss))
+        res_total_gain = dict(zip(self.variant_names, total_gain))
 
-        return res_pbbs, res_loss, posterior_samples
+        return res_pbbs, res_loss, posterior_samples, res_total_gain
 
     def evaluate(self, sim_count: int = 20000, seed: int = None) -> List[dict]:
         """
@@ -130,14 +131,18 @@ class DeltaLognormalDataTest(BaseDataTest):
             "avg_positive_values",
             "prob_being_best",
             "expected_loss",
+            "expected_total_gain",
         ]
         avg_values = [round(i[0] / i[1], 5) for i in zip(self.sum_values, self.totals)]
         avg_pos_values = [
             round(i[0] / i[1], 5) for i in zip(self.sum_values, self.positives)
         ]
-        eval_pbbs, eval_loss, posterior_samples = self.eval_simulation(sim_count, seed)
+        eval_pbbs, eval_loss, posterior_samples, eval_total_gain = self.eval_simulation(
+            sim_count, seed
+        )
         pbbs = list(eval_pbbs.values())
         loss = list(eval_loss.values())
+        total_gain = list(eval_total_gain.values())
         data = [
             self.variant_names,
             self.totals,
@@ -147,13 +152,16 @@ class DeltaLognormalDataTest(BaseDataTest):
             avg_pos_values,
             pbbs,
             loss,
+            total_gain,
         ]
         res = [dict(zip(keys, item)) for item in zip(*data)]
 
         return res
 
     def carry_value(self, sim_count: int = 20000, seed: int = None) -> list:
-        eval_pbbs, eval_loss, posterior_samples = self.eval_simulation(sim_count, seed)
+        eval_pbbs, eval_loss, posterior_samples, eval_total_gain = self.eval_simulation(
+            sim_count, seed
+        )
 
         return list(posterior_samples)
 
