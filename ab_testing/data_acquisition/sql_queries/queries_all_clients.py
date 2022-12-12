@@ -17,6 +17,7 @@ GROUP BY user_id
 
 query_bingo_aloha_small = """
 SELECT user_id
+     , meta_date
      , CASE
            WHEN group_tag = 'control' THEN 'C'
            WHEN group_tag = 'personalized' THEN 'P'
@@ -26,8 +27,9 @@ SELECT user_id
 FROM analytics__century_games_ncmgu__bingo_aloha_r3g9v.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
-  AND fl_personalized_offer_spend <> %(spend_type)s
+  AND (fl_personalized_offer_spend IS NULL OR fl_personalized_offer_spend <> %(spend_type)s)
 GROUP BY user_id
+       , meta_date
        , group_tag;
 """
 
@@ -50,6 +52,7 @@ GROUP BY user_id
 
 query_terra_genesis_small = """
 SELECT user_id
+     , meta_date
      , CASE
            WHEN group_tag = 'control' THEN 'C'
            WHEN group_tag = 'personalized' THEN 'P'
@@ -60,7 +63,8 @@ FROM analytics__tilting_point_mjs4k__terragenesis_m89uz.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
 GROUP BY user_id
-       , group_tag;
+       , group_tag
+       , meta_date;
 """
 
 query_spongebob = """
@@ -82,6 +86,7 @@ GROUP BY user_id
 
 query_spongebob_small = """
 SELECT user_id
+     , meta_date
      , CASE
            WHEN group_tag = 'control' THEN 'C'
            WHEN group_tag = 'personalized' THEN 'P'
@@ -92,6 +97,7 @@ FROM analytics__tilting_point_mjs4k__spongebob_x7d9q.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
 GROUP BY user_id
+       , meta_date
        , group_tag;
 """
 
@@ -114,6 +120,7 @@ GROUP BY user_id
 
 query_ultimex_small = """
 SELECT user_id
+     , meta_date
      , CASE
            WHEN group_tag = 'control' THEN 'C'
            WHEN group_tag = 'personalized' THEN 'P'
@@ -123,9 +130,10 @@ SELECT user_id
 FROM analytics__sparkgaming_vjv6s__ultimate_x_poker_rib6t.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
-  AND fl_personalized_offer_spend <> %(spend_type)s
+  AND (fl_personalized_offer_spend IS NULL OR fl_personalized_offer_spend <> %(spend_type)s)
 GROUP BY user_id
-       , group_tag;
+       , group_tag
+       , meta_date;
 """
 
 query_homw = """
@@ -147,6 +155,7 @@ GROUP BY user_id
 
 query_homw_small = """
 SELECT user_id
+     , meta_date
      , CASE
            WHEN group_tag = 'control' THEN 'C'
            WHEN group_tag = 'personalized' THEN 'P'
@@ -156,9 +165,10 @@ SELECT user_id
 FROM analytics__sparkgaming_vjv6s__ultimate_x_poker_rib6t.user_level_performance
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
-  AND fl_personalized_offer_spend <> %(spend_type)s
+  AND (fl_personalized_offer_spend IS NULL OR fl_personalized_offer_spend <> %(spend_type)s)
 GROUP BY user_id
-       , group_tag;
+       , group_tag
+       , meta_date;
 """
 
 query_idle_mafia = """
@@ -186,6 +196,7 @@ GROUP BY user_id
 
 query_idle_mafia_small = """
 SELECT user_id
+     , meta_date
      , CASE
            WHEN group_tag = 'control' THEN 'C'
            WHEN group_tag = 'personalized' THEN 'P'
@@ -201,7 +212,8 @@ FROM (
      )
 WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
-  AND fl_personalized_offer_spend <> %(spend_type)s
+  AND (fl_personalized_offer_spend IS NULL OR fl_personalized_offer_spend <> %(spend_type)s)
 GROUP BY user_id
-       , group_tag;
+       , group_tag
+       , meta_date;
 """
