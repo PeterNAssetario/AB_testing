@@ -1,25 +1,29 @@
 from pathlib import Path
 
 import pandas as pd
-
-from ab_testing.constants import client_name
-
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
 
-from ab_testing.data_acquisition.sql_queries.queries_all_clients import (
+from ab_testing.constants import client_name
+from ab_testing.data_acquisition.sql_queries.queries_all_clients import (  # query_bingo_aloha_small,; query_homw_small,; query_idle_mafia_small,; query_spongebob_small,; query_terra_genesis_small,; query_ultimex_small,
     query_homw,
     query_ultimex,
     query_spongebob,
     query_idle_mafia,
-    query_terra_genesis,
     query_bingo_aloha,
-    query_bingo_aloha_small,
-    query_homw_small,
-    query_idle_mafia_small,
-    query_spongebob_small,
-    query_terra_genesis_small,
-    query_ultimex_small,
+    query_homw_sample,
+    query_terra_genesis,
+    query_ultimex_sample,
+    query_homw_date_limits,
+    query_spongebob_sample,
+    query_idle_mafia_sample,
+    query_bingo_aloha_sample,
+    query_ultimex_date_limits,
+    query_terra_genesis_sample,
+    query_spongebob_date_limits,
+    query_idle_mafia_date_limits,
+    query_bingo_aloha_date_limits,
+    query_terra_genesis_date_limits,
 )
 
 configure_offline_feature_store(workgroup="analytics")
@@ -32,12 +36,18 @@ queries_dict = {
     "spongebob": query_spongebob,
     "terra_genesis": query_terra_genesis,
     "ultimex": query_ultimex,
-    "bingo_aloha_small": query_bingo_aloha_small,
-    "homw_small": query_homw_small,
-    "idle_mafia_small": query_idle_mafia_small,
-    "spongebob_small": query_spongebob_small,
-    "terra_genesis_small": query_terra_genesis_small,
-    "ultimex_small": query_ultimex_small,
+    "bingo_aloha_sample": query_bingo_aloha_sample,
+    "homw_sample": query_homw_sample,
+    "idle_mafia_sample": query_idle_mafia_sample,
+    "spongebob_sample": query_spongebob_sample,
+    "terra_genesis_sample": query_terra_genesis_sample,
+    "ultimex_sample": query_ultimex_sample,
+    "bingo_aloha_date_limits": query_bingo_aloha_date_limits,
+    "homw_date_limits": query_homw_date_limits,
+    "idle_mafia_date_limits": query_idle_mafia_date_limits,
+    "spongebob_date_limits": query_spongebob_date_limits,
+    "terra_genesis_date_limits": query_terra_genesis_date_limits,
+    "ultimex_date_limits": query_ultimex_date_limits,
 }
 
 
