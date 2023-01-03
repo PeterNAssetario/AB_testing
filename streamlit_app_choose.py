@@ -1,22 +1,21 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import scipy.stats
-from scipy.stats import norm
-import altair as alt
-
-import matplotlib as plt
-import seaborn as sns
-import arviz as az
 from pathlib import Path
 
-from ab_testing.constants import client_name, target_col
-from ab_testing.distribution_fit.fit_distribution import FitDistribution
-from ab_testing.predictions.produce_predictions import ProducePredictions
-from ab_testing.data_acquisition.acquire_data import queries_dict  # AcquireData
-
+import arviz as az
+import numpy as np
+import altair as alt
+import pandas as pd
+import seaborn as sns
+import streamlit as st
+import matplotlib as plt
+import scipy.stats
+from scipy.stats import norm
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
+
+from ab_testing.constants import target_col, client_name
+from ab_testing.data_acquisition.acquire_data import queries_dict  # AcquireData
+from ab_testing.predictions.produce_predictions import ProducePredictions
+from ab_testing.distribution_fit.fit_distribution import FitDistribution
 
 allow_reuse = True
 
@@ -57,21 +56,18 @@ client_map = {
 }
 
 client_name = client_map[option]
-ab_default = 'test_group'
-result_default = 'total_wins_spend'
-spend_default = 'personalised'
+ab_default = "test_group"
+result_default = "total_wins_spend"
+spend_default = "personalised"
+
+configure_offline_feature_store(workgroup="development", catalog_name="production")
 
 if client_name:
-    try:
-        configure_offline_feature_store(
-            workgroup="primary"
-        )
-    except:
-        configure_offline_feature_store(
-            workgroup="development", catalog_name="production"
-        )
     initial_data = FeatureStoreOfflineClient.run_athena_query_pandas(
-        queries_dict[client_name]
+        queries_dict[client_name + "_sample"]
+    )
+    data_date_limits = FeatureStoreOfflineClient.run_athena_query_pandas(
+        queries_dict[client_name + "_date_limits"]
     )
 
     st.markdown("### Data Preview")
@@ -98,14 +94,15 @@ if client_name:
             with set1_col3:
                 spend_type = st.multiselect(
                     "Spend Type",
-                    options=['personalised','non-personalised'],
+                    options=["personalised", "non-personalised"],
                     help="Select what type of spend you wish to analyse, select both for both.",
                     default=spend_default,
                 )
-        else: spend_type = []
-        
-        min_date_val = initial_data.meta_date.min()
-        max_date_val = initial_data.meta_date.max()
+        else:
+            spend_type = []
+
+        min_date_val = data_date_limits.min_meta_date[0]
+        max_date_val = data_date_limits.max_meta_date[0]
         set2_col1, set2_col2 = st.columns(2)
         with set2_col1:
             start_date = st.date_input(
@@ -121,9 +118,9 @@ if client_name:
                 min_value=min_date_val,
                 max_value=max_date_val,
             )
-        
-        min_fl_val = initial_data.first_login.min()
-        max_fl_val = initial_data.first_login.max()
+
+        min_fl_val = data_date_limits.min_first_login[0]
+        max_fl_val = data_date_limits.max_first_login[0]
         set3_col1, set3_col2 = st.columns(2)
         with set3_col1:
             start_fl = st.date_input(
@@ -165,24 +162,26 @@ if client_name:
             )
 
         submit_button = st.form_submit_button(label="Submit")
-    
+
     if submit_button:
         if not ab or not result:
             st.warning("Please select both an **A/B column** and a **Result column**.")
             st.stop()
-        
-        if len(spend_type) in [0,2]: spend_type = 9
-        elif spend_type[0] == 'personalised': spend_type = 0
-        elif spend_type[0] == 'non-personalised': spend_type = 1
-        client_name_small = client_name + '_small'
+
+        if len(spend_type) in [0, 2]:
+            spend_type = 9
+        elif spend_type[0] == "personalised":
+            spend_type = 0
+        elif spend_type[0] == "non-personalised":
+            spend_type = 1
         initial_data = FeatureStoreOfflineClient.run_athena_query_pandas(
-            queries_dict[client_name_small],
+            queries_dict[client_name],
             {
-                'strt_date':str(start_date)[0:10],
-                'end_date':str(end_date)[0:10],
-                'strt_fl':str(start_fl)[0:10],
-                'end_fl':str(end_fl)[0:10],
-                'spend_type':int(spend_type),
+                "strt_date": str(start_date)[0:10],
+                "end_date": str(end_date)[0:10],
+                "strt_fl": str(start_fl)[0:10],
+                "end_fl": str(end_fl)[0:10],
+                "spend_type": int(spend_type),
             },
         )
 
@@ -206,8 +205,12 @@ if client_name:
         # Create test results:
         result = ProducePredictions()
         results_conversion = result.produce_results_conversion(initial_data)
-        results_revenue = result.produce_results_revenue(best_distribution, initial_data)
-        results_posterior_sample = result._produce_results_lognorm_dist_carry_value(initial_data)
+        results_revenue = result.produce_results_revenue(
+            best_distribution, initial_data
+        )
+        results_posterior_sample = result._produce_results_lognorm_dist_carry_value(
+            initial_data
+        )
 
         # Set up metrics:
         post_sample_A = results_posterior_sample[1]
@@ -236,7 +239,8 @@ if client_name:
                 value="%.2f%%"
                 % (
                     (
-                        results_conversion[0]["positive_rate"] - results_conversion[1]["positive_rate"]
+                        results_conversion[0]["positive_rate"]
+                        - results_conversion[1]["positive_rate"]
                     )
                     * 100
                 ),
@@ -290,12 +294,20 @@ if client_name:
             x = l.get_xydata()[:, 0]
             y = l.get_xydata()[:, 1]
             x_new = x[
-                [all(tup) for tup in zip(list(x >= hdi_diff[0]), list(x <= hdi_diff[1]))]
+                [
+                    all(tup)
+                    for tup in zip(list(x >= hdi_diff[0]), list(x <= hdi_diff[1]))
+                ]
             ]
             y_new = y[
-                [all(tup) for tup in zip(list(x >= hdi_diff[0]), list(x <= hdi_diff[1]))]
+                [
+                    all(tup)
+                    for tup in zip(list(x >= hdi_diff[0]), list(x <= hdi_diff[1]))
+                ]
             ]
-            ax2.xaxis.set_major_formatter(plt.ticker.PercentFormatter(xmax=1, decimals=2))
+            ax2.xaxis.set_major_formatter(
+                plt.ticker.PercentFormatter(xmax=1, decimals=2)
+            )
             ax2.fill_between(x_new, y_new, color="purple", alpha=0.3)
             st.pyplot(fig2)
 
@@ -344,14 +356,17 @@ if client_name:
             "%.2f%%"
             % (
                 (
-                    results_conversion[0]["positive_rate"] - results_conversion[1]["positive_rate"]
+                    results_conversion[0]["positive_rate"]
+                    - results_conversion[1]["positive_rate"]
                 )
                 * 100
             ),
-            "%.4f$" % (results_revenue[0]["avg_values"] - results_revenue[1]["avg_values"]),
+            "%.4f$"
+            % (results_revenue[0]["avg_values"] - results_revenue[1]["avg_values"]),
             "%.4f$"
             % (
-                results_revenue[0]["avg_positive_values"] - results_revenue[1]["avg_positive_values"]
+                results_revenue[0]["avg_positive_values"]
+                - results_revenue[1]["avg_positive_values"]
             ),
             "[%.4f$, %.4f$]" % (hdi_diff_ab[0], hdi_diff_ab[1]),
         ]
