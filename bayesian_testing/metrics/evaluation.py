@@ -1,16 +1,16 @@
 import pdb
-from numbers import Number
 from typing import List, Tuple, Union
+from numbers import Number
 
 import numpy as np
 
+from bayesian_testing.utilities import get_logger
 from bayesian_testing.metrics.posteriors import (
+    normal_posteriors,
     beta_posteriors_all,
     dirichlet_posteriors,
     lognormal_posteriors,
-    normal_posteriors,
 )
-from bayesian_testing.utilities import get_logger
 
 logger = get_logger("bayesian_testing")
 
@@ -81,7 +81,7 @@ def estimate_expected_total_gain(
     -------
     res : List of expected total gains for each variant.
     """
-    #pdb.set_trace()
+    # pdb.set_trace()
     res = list(np.mean(data - data[[1, 0], :], axis=1).round(7))
     return res
 
@@ -299,53 +299,3 @@ def eval_delta_lognormal_agg(
         res_total_gain = estimate_expected_total_gain(combined_samples)
 
     return res_pbbs, res_loss, combined_samples, res_total_gain
-
-
-def eval_numerical_dirichlet_agg(
-    states: List[Union[float, int]],
-    concentrations: List[List[int]],
-    prior_alphas: List[List[Union[float, int]]] = None,
-    sim_count: int = 20000,
-    seed: int = None,
-):
-    """
-    Method estimating probabilities of being best and expected loss for dirichlet-multinomial
-    aggregated data per variant. States in this case are expected to be a numerical values
-    (e.g. dice numbers, number of stars in a rating, etc.).
-
-    Parameters
-    ----------
-    states : All possible outcomes in given multinomial distribution.
-    concentrations : Concentration of observations for each state for all variants.
-    prior_alphas : Prior alpha values for each state for all variants.
-    sim_count : Number of simulations.
-    seed : Random seed.
-
-    Returns
-    -------
-    res_pbbs : List of probabilities of being best for each variant.
-    res_loss : List of expected loss for each variant.
-    """
-    if len(concentrations) == 0:
-        return [], []
-
-    # default prior will be expecting 1 observation in all states for all variants
-    if not prior_alphas:
-        prior_alphas = [[1] * len(states) for i in range(len(concentrations))]
-
-    # we will need different generators for each call of dirichlet_posteriors
-    ss = np.random.SeedSequence(seed)
-    child_seeds = ss.spawn(len(concentrations))
-
-    means_samples = []
-    for i in range(len(concentrations)):
-        dir_post = dirichlet_posteriors(
-            concentrations[i], prior_alphas[i], sim_count, child_seeds[i]
-        )
-        means = np.sum(np.multiply(dir_post, np.array(states)), axis=1)
-        means_samples.append(list(means))
-
-    res_pbbs = estimate_probabilities(means_samples)
-    res_loss = estimate_expected_loss(means_samples)
-
-    return res_pbbs, res_loss
