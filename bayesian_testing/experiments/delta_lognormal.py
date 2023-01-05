@@ -1,14 +1,13 @@
-from numbers import Number
 from typing import List, Tuple
+from numbers import Number
 
 import numpy as np
 
-from bayesian_testing.experiments.base import BaseDataTest
 from bayesian_testing.metrics import eval_delta_lognormal_agg
 from bayesian_testing.utilities import get_logger
+from bayesian_testing.experiments.base import BaseDataTest
 
 logger = get_logger("bayesian_testing")
-import pdb
 
 
 class DeltaLognormalDataTest(BaseDataTest):
@@ -173,13 +172,12 @@ class DeltaLognormalDataTest(BaseDataTest):
         sum_values: float,
         sum_logs: float,
         sum_logs_2: float,
-        a_prior_beta: Number = 0.5,
-        b_prior_beta: Number = 0.5,
-        m_prior: Number = 1,
-        a_prior_ig: Number = 0,
-        b_prior_ig: Number = 0,
-        w_prior: Number = 0.01,
-        replace: bool = True,
+        a_prior_beta: float = 0.5,
+        b_prior_beta: float = 0.5,
+        m_prior: float = 1,
+        a_prior_ig: float = 0,
+        b_prior_ig: float = 0,
+        w_prior: float = 0.01,
     ) -> None:
         """
         Add variant data to test class using aggregated delta-lognormal data.
@@ -204,8 +202,6 @@ class DeltaLognormalDataTest(BaseDataTest):
         b_prior_ig : Prior beta from inverse gamma dist. for unknown variance of logarithms.
             In theory b > 0, but as we always have at least one observation, we can start at 0.
         w_prior : Prior effective sample sizes for normal distribution of logarithms of data.
-        replace : Replace data if variant already exists.
-            If set to False, data of existing variant will be appended to existing data.
         """
         if not isinstance(name, str):
             raise ValueError("Variant name has to be a string.")
@@ -222,8 +218,9 @@ class DeltaLognormalDataTest(BaseDataTest):
                 "Input variable 'positives' is expected to be non-negative integer."
             )
         if totals < positives:
-            raise ValueError("Not possible to have more positives that totals!")
+            raise ValueError("Not possible to have more positives than totals!")
 
+        ### POSTERIORS
         a_post_beta = positives + a_prior_beta
         b_post_beta = totals - positives + b_prior_beta
 
@@ -231,84 +228,48 @@ class DeltaLognormalDataTest(BaseDataTest):
         a_post_ig = a_prior_ig + (positives / 2)
         b_post_ig = (
             b_prior_ig
-            + (1 / 2) * (sum_logs_2 - 2 * sum_logs * x_bar + positives * (x_bar ** 2))
+            + (1 / 2) * (sum_logs_2 - 2 * sum_logs * x_bar + positives * (x_bar**2))
             + ((positives * w_prior) / (2 * (positives + w_prior)))
             * ((x_bar - m_prior) ** 2)
         )
         m_post = (positives * x_bar + w_prior * m_prior) / (positives + w_prior)
         w_post = w_prior + positives
+        ########
 
-        # print("delta_log_normal")
-        # pdb.set_trace()
-        if name not in self.variant_names:
-            self.data[name] = {
-                "totals": totals,
-                "positives": positives,
-                "sum_values": sum_values,
-                "sum_logs": sum_logs,
-                "sum_logs_2": sum_logs_2,
-                "a_prior_beta": a_prior_beta,
-                "b_prior_beta": b_prior_beta,
-                "m_prior": m_prior,
-                "a_prior_ig": a_prior_ig,
-                "b_prior_ig": b_prior_ig,
-                "w_prior": w_prior,
-                "a_post_beta": a_post_beta,
-                "b_post_beta": b_post_beta,
-                "a_post_ig": a_post_ig,
-                "b_post_ig": b_post_ig,
-                "m_post": m_post,
-                "w_post": w_post,
-            }
-        elif name in self.variant_names and replace:
-            msg = (
-                f"Variant {name} already exists - new data is replacing it. "
-                "If you wish to append instead, use replace=False."
-            )
+        if name in self.variant_names:
+            msg = f"Variant {name} already exists - new data is replacing it. "
             logger.info(msg)
-            self.data[name] = {
-                "totals": totals,
-                "positives": positives,
-                "sum_values": sum_values,
-                "sum_logs": sum_logs,
-                "sum_logs_2": sum_logs_2,
-                "a_prior_beta": a_prior_beta,
-                "b_prior_beta": b_prior_beta,
-                "m_prior": m_prior,
-                "a_prior_ig": a_prior_ig,
-                "b_prior_ig": b_prior_ig,
-                "w_prior": w_prior,
-                "a_post_beta": a_post_beta,
-                "b_post_beta": b_post_beta,
-                "a_post_ig": a_post_ig,
-                "b_post_ig": b_post_ig,
-                "m_post": m_post,
-                "w_post": w_post,
-            }
-        elif name in self.variant_names and not replace:
-            msg = (
-                f"Variant {name} already exists - new data is appended to variant, "
-                "keeping its original prior setup. "
-                "If you wish to replace data instead, use replace=True."
-            )
-            logger.info(msg)
-            self.data[name]["totals"] += totals
-            self.data[name]["positives"] += positives
-            self.data[name]["sum_values"] += sum_values
-            self.data[name]["sum_logs"] += sum_logs
-            self.data[name]["sum_logs_2"] += sum_logs_2
+
+        self.data[name] = {
+            "totals": totals,
+            "positives": positives,
+            "sum_values": sum_values,
+            "sum_logs": sum_logs,
+            "sum_logs_2": sum_logs_2,
+            "a_prior_beta": a_prior_beta,
+            "b_prior_beta": b_prior_beta,
+            "m_prior": m_prior,
+            "a_prior_ig": a_prior_ig,
+            "b_prior_ig": b_prior_ig,
+            "w_prior": w_prior,
+            "a_post_beta": a_post_beta,
+            "b_post_beta": b_post_beta,
+            "a_post_ig": a_post_ig,
+            "b_post_ig": b_post_ig,
+            "m_post": m_post,
+            "w_post": w_post,
+        }
 
     def add_variant_data(
         self,
         name: str,
-        data: List[Number],
-        a_prior_beta: Number = 0.5,
-        b_prior_beta: Number = 0.5,
-        m_prior: Number = 1,
-        a_prior_ig: Number = 0,
-        b_prior_ig: Number = 0,
-        w_prior: Number = 0.01,
-        replace: bool = True,
+        data: List[float],
+        a_prior_beta: float = 0.5,
+        b_prior_beta: float = 0.5,
+        m_prior: float = 1,
+        a_prior_ig: float = 0,
+        b_prior_ig: float = 0,
+        w_prior: float = 0.01,
     ) -> None:
         """
         Add variant data to test class using raw delta-lognormal data.
@@ -327,8 +288,6 @@ class DeltaLognormalDataTest(BaseDataTest):
         b_prior_ig : Prior beta from inverse gamma dist. for unknown variance of logarithms.
             In theory b > 0, but as we always have at least one observation, we can start at 0.
         w_prior : Prior effective sample sizes for normal distribution of logarithms of data.
-        replace : Replace data if variant already exists.
-            If set to False, data of existing variant will be appended to existing data.
         """
         if len(data) == 0:
             raise ValueError("Data of added variant needs to have some observations.")
@@ -354,5 +313,4 @@ class DeltaLognormalDataTest(BaseDataTest):
             a_prior_ig,
             b_prior_ig,
             w_prior,
-            replace,
         )

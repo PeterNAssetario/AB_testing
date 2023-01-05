@@ -8,7 +8,6 @@ from bayesian_testing.utilities import get_logger
 from bayesian_testing.metrics.posteriors import (
     normal_posteriors,
     beta_posteriors_all,
-    dirichlet_posteriors,
     lognormal_posteriors,
 )
 

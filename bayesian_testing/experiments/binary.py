@@ -1,9 +1,9 @@
-from numbers import Number
 from typing import List, Tuple
+from numbers import Number
 
-from bayesian_testing.experiments.base import BaseDataTest
 from bayesian_testing.metrics import eval_bernoulli_agg
 from bayesian_testing.utilities import get_logger
+from bayesian_testing.experiments.base import BaseDataTest
 
 logger = get_logger("bayesian_testing")
 
@@ -83,7 +83,7 @@ class BinaryDataTest(BaseDataTest):
             "positive_rate",
             "prob_being_best",
             "expected_loss",
-            "expected_total_gain"
+            "expected_total_gain",
         ]
 
         positive_rate = [
@@ -100,7 +100,7 @@ class BinaryDataTest(BaseDataTest):
             positive_rate,
             pbbs,
             loss,
-            total_gain
+            total_gain,
         ]
         res = [dict(zip(keys, item)) for item in zip(*data)]
 
@@ -111,9 +111,8 @@ class BinaryDataTest(BaseDataTest):
         name: str,
         totals: int,
         positives: int,
-        a_prior: Number = 0.5,
-        b_prior: Number = 0.5,
-        replace: bool = True,
+        a_prior: float = 0.5,
+        b_prior: float = 0.5,
     ) -> None:
         """
         Add variant data to test class using aggregated binary data.
@@ -130,8 +129,6 @@ class BinaryDataTest(BaseDataTest):
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
         b_prior : Prior beta parameter for Beta distributions.
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
-        replace : Replace data if variant already exists.
-            If set to False, data of existing variant will be appended to existing data.
         """
         if not isinstance(name, str):
             raise ValueError("Variant name has to be a string.")
@@ -148,46 +145,25 @@ class BinaryDataTest(BaseDataTest):
         if totals < positives:
             raise ValueError("Not possible to have more positives that totals!")
 
-        if name not in self.variant_names:
-            self.data[name] = {
-                "totals": totals,
-                "positives": positives,
-                "a_prior": a_prior,
-                "b_prior": b_prior,
-                "a_posterior": positives + a_prior,
-                "b_posterior": totals - positives + b_prior,
-            }
-        elif name in self.variant_names and replace:
-            msg = (
-                f"Variant {name} already exists - new data is replacing it. "
-                "If you wish to append instead, use replace=False."
-            )
+        if name in self.variant_names:
+            msg = f"Variant {name} already exists - new data is replacing it. "
             logger.info(msg)
-            self.data[name] = {
-                "totals": totals,
-                "positives": positives,
-                "a_prior": a_prior,
-                "b_prior": b_prior,
-                "a_posterior": positives + a_prior,
-                "b_posterior": totals - positives + b_prior,
-            }
-        elif name in self.variant_names and not replace:
-            msg = (
-                f"Variant {name} already exists - new data is appended to variant, "
-                "keeping its original prior setup. "
-                "If you wish to replace data instead, use replace=True."
-            )
-            logger.info(msg)
-            self.data[name]["totals"] += totals
-            self.data[name]["positives"] += positives
+
+        self.data[name] = {
+            "totals": totals,
+            "positives": positives,
+            "a_prior": a_prior,
+            "b_prior": b_prior,
+            "a_posterior": positives + a_prior,
+            "b_posterior": totals - positives + b_prior,
+        }
 
     def add_variant_data(
         self,
         name: str,
         data: List[int],
-        a_prior: Number = 0.5,
-        b_prior: Number = 0.5,
-        replace: bool = True,
+        a_prior: float = 0.5,
+        b_prior: float = 0.5,
     ) -> None:
         """
         Add variant data to test class using raw binary data.
@@ -202,8 +178,6 @@ class BinaryDataTest(BaseDataTest):
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
         b_prior : Prior beta parameter for Beta distributions.
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
-        replace : Replace data if variant already exists.
-            If set to False, data of existing variant will be appended to existing data.
         """
         if len(data) == 0:
             raise ValueError("Data of added variant needs to have some observations.")
@@ -213,4 +187,4 @@ class BinaryDataTest(BaseDataTest):
         totals = len(data)
         positives = sum(data)
 
-        self.add_variant_data_agg(name, totals, positives, a_prior, b_prior, replace)
+        self.add_variant_data_agg(name, totals, positives, a_prior, b_prior)
