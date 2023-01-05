@@ -286,7 +286,7 @@ if client_name:
             st.pyplot(fig)
 
         with row2_col2, _lock:
-            st.subheader("Apporximate Distribution of Uplifts")
+            st.subheader("Approximate Distribution of Uplifts")
             fig2 = plt.figure.Figure()
             ax2 = fig2.add_subplot(111)
             fig_temp2 = sns.kdeplot(post_sample_uplift, color="purple", ax=ax2)
