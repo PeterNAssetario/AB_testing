@@ -182,7 +182,6 @@ query_homw = """
 SELECT user_id
      , meta_date
      , first_login
-     , first_login
      , CASE
            WHEN group_tag = 'control' THEN 'C'
            WHEN group_tag = 'personalized' THEN 'P'
@@ -194,7 +193,6 @@ WHERE meta_date   BETWEEN DATE %(strt_date)s AND DATE %(end_date)s
   AND first_login BETWEEN DATE %(strt_fl)s   AND DATE %(end_fl)s
 GROUP BY user_id
        , group_tag
-       , first_login
        , first_login
        , meta_date;
 """
