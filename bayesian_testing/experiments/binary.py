@@ -40,7 +40,7 @@ class BinaryDataTest(BaseDataTest):
 
     def eval_simulation(
         self, sim_count: int = 20000, seed: int = None
-    ) -> Tuple[dict, dict]:
+    ) -> Tuple[dict, dict, dict, dict, dict]:
         """
         Calculate probabilities of being best and expected loss for a current class state.
 
@@ -54,14 +54,16 @@ class BinaryDataTest(BaseDataTest):
         res_pbbs : Dictionary with probabilities of being best for all variants in experiment.
         res_loss : Dictionary with expected loss for all variants in experiment.
         """
-        pbbs, loss, total_gain = eval_bernoulli_agg(
+        pbbs, loss, total_gain, a_posteriors, b_posteriors = eval_bernoulli_agg(
             self.totals, self.positives, self.a_priors, self.b_priors, sim_count, seed
         )
         res_pbbs = dict(zip(self.variant_names, pbbs))
         res_loss = dict(zip(self.variant_names, loss))
         res_total_gain = dict(zip(self.variant_names, total_gain))
+        res_a_posteriors = dict(zip(self.variant_names, a_posteriors))
+        res_b_posteriors = dict(zip(self.variant_names, b_posteriors))
 
-        return res_pbbs, res_loss, res_total_gain
+        return res_pbbs, res_loss, res_total_gain, res_a_posteriors, res_b_posteriors
 
     def evaluate(self, sim_count: int = 20000, seed: int = None) -> List[dict]:
         """
@@ -84,15 +86,25 @@ class BinaryDataTest(BaseDataTest):
             "prob_being_best",
             "expected_loss",
             "expected_total_gain",
+            "a_post",
+            "b_post",
         ]
 
         positive_rate = [
             round(i[0] / i[1], 5) for i in zip(self.positives, self.totals)
         ]
-        eval_pbbs, eval_loss, eval_total_gain = self.eval_simulation(sim_count, seed)
+        (
+            eval_pbbs,
+            eval_loss,
+            eval_total_gain,
+            eval_a_posteriors,
+            eval_b_posteriors,
+        ) = self.eval_simulation(sim_count, seed)
         pbbs = list(eval_pbbs.values())
         loss = list(eval_loss.values())
         total_gain = list(eval_total_gain.values())
+        a_post = list(eval_a_posteriors.values())
+        b_post = list(eval_b_posteriors.values())
         data = [
             self.variant_names,
             self.totals,
@@ -101,6 +113,8 @@ class BinaryDataTest(BaseDataTest):
             pbbs,
             loss,
             total_gain,
+            a_post,
+            b_post,
         ]
         res = [dict(zip(keys, item)) for item in zip(*data)]
 

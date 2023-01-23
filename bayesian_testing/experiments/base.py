@@ -1,5 +1,5 @@
-from typing import Tuple
 import warnings
+from typing import Tuple
 
 
 class BaseDataTest:
@@ -17,11 +17,11 @@ class BaseDataTest:
     def variant_names(self):
         return [k for k in self.data]
 
-    def eval_simulation(self, sim_count: int = 20000, seed: int = None) -> Tuple[dict, dict]:
-        """
-        Should be implemented in each individual experiment.
-        """
-        raise NotImplementedError
+    #    def eval_simulation(self, sim_count: int = 20000, seed: int = None) -> Tuple[dict, dict]:
+    #        """
+    #        Should be implemented in each individual experiment.
+    #        """
+    #        raise NotImplementedError
 
     def probabs_of_being_best(self, sim_count: int = 20000, seed: int = None) -> dict:
         """
@@ -68,6 +68,8 @@ class BaseDataTest:
         if not isinstance(name, str):
             raise ValueError("Variant name has to be a string.")
         if name not in self.variant_names:
-            warnings.warn(f"Nothing to be deleted. Variant {name} is not in experiment.")
+            warnings.warn(
+                f"Nothing to be deleted. Variant {name} is not in experiment."
+            )
         else:
             del self.data[name]

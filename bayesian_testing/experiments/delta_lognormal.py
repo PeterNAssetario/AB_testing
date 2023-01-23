@@ -74,7 +74,7 @@ class DeltaLognormalDataTest(BaseDataTest):
 
     def eval_simulation(
         self, sim_count: int = 20000, seed: int = None
-    ) -> Tuple[dict, dict, list]:
+    ) -> Tuple[dict, dict, dict, dict, dict, dict, dict, dict, dict]:
         """
         Calculate probabilities of being best and expected loss for a current class state.
 
@@ -88,7 +88,17 @@ class DeltaLognormalDataTest(BaseDataTest):
         res_pbbs : Dictionary with probabilities of being best for all variants in experiment.
         res_loss : Dictionary with expected loss for all variants in experiment.
         """
-        pbbs, loss, posterior_samples, total_gain = eval_delta_lognormal_agg(
+        (
+            pbbs,
+            loss,
+            total_gain,
+            a_posteriors_beta,
+            b_posteriors_beta,
+            a_posteriors_ig,
+            b_posteriors_ig,
+            w_posteriors,
+            m_posteriors,
+        ) = eval_delta_lognormal_agg(
             self.totals,
             self.positives,
             self.sum_logs,
@@ -105,8 +115,23 @@ class DeltaLognormalDataTest(BaseDataTest):
         res_pbbs = dict(zip(self.variant_names, pbbs))
         res_loss = dict(zip(self.variant_names, loss))
         res_total_gain = dict(zip(self.variant_names, total_gain))
-
-        return res_pbbs, res_loss, posterior_samples, res_total_gain
+        res_a_posteriors_beta = dict(zip(self.variant_names, a_posteriors_beta))
+        res_b_posteriors_beta = dict(zip(self.variant_names, b_posteriors_beta))
+        res_a_posteriors_ig = dict(zip(self.variant_names, a_posteriors_ig))
+        res_b_posteriors_ig = dict(zip(self.variant_names, b_posteriors_ig))
+        res_w_posteriors = dict(zip(self.variant_names, w_posteriors))
+        res_m_posteriors = dict(zip(self.variant_names, m_posteriors))
+        return (
+            res_pbbs,
+            res_loss,
+            res_total_gain,
+            res_a_posteriors_beta,
+            res_b_posteriors_beta,
+            res_a_posteriors_ig,
+            res_b_posteriors_ig,
+            res_w_posteriors,
+            res_m_posteriors,
+        )
 
     def evaluate(self, sim_count: int = 20000, seed: int = None) -> List[dict]:
         """
@@ -131,17 +156,38 @@ class DeltaLognormalDataTest(BaseDataTest):
             "prob_being_best",
             "expected_loss",
             "expected_total_gain",
+            "a_post_beta",
+            "b_post_beta",
+            "a_post_ig",
+            "b_post_ig",
+            "w_post",
+            "m_post",
         ]
         avg_values = [round(i[0] / i[1], 5) for i in zip(self.sum_values, self.totals)]
         avg_pos_values = [
             round(i[0] / i[1], 5) for i in zip(self.sum_values, self.positives)
         ]
-        eval_pbbs, eval_loss, posterior_samples, eval_total_gain = self.eval_simulation(
-            sim_count, seed
-        )
+        (
+            eval_pbbs,
+            eval_loss,
+            eval_total_gain,
+            eval_a_posteriors_beta,
+            eval_b_posteriors_beta,
+            eval_a_posteriors_ig,
+            eval_b_posteriors_ig,
+            eval_w_posteriors,
+            eval_m_posteriors,
+        ) = self.eval_simulation(sim_count, seed)
         pbbs = list(eval_pbbs.values())
         loss = list(eval_loss.values())
         total_gain = list(eval_total_gain.values())
+        a_posteriors_beta = list(eval_a_posteriors_beta.values())
+        b_posteriors_beta = list(eval_b_posteriors_beta.values())
+        a_posteriors_ig = list(eval_a_posteriors_ig.values())
+        b_posteriors_ig = list(eval_b_posteriors_ig.values())
+        w_posteriors = list(eval_w_posteriors.values())
+        m_posteriors = list(eval_m_posteriors.values())
+
         data = [
             self.variant_names,
             self.totals,
@@ -152,17 +198,23 @@ class DeltaLognormalDataTest(BaseDataTest):
             pbbs,
             loss,
             total_gain,
+            a_posteriors_beta,
+            b_posteriors_beta,
+            a_posteriors_ig,
+            b_posteriors_ig,
+            w_posteriors,
+            m_posteriors,
         ]
         res = [dict(zip(keys, item)) for item in zip(*data)]
 
         return res
 
-    def carry_value(self, sim_count: int = 20000, seed: int = None) -> list:
-        eval_pbbs, eval_loss, posterior_samples, eval_total_gain = self.eval_simulation(
-            sim_count, seed
-        )
-
-        return list(posterior_samples)
+    #    def carry_value(self, sim_count: int = 20000, seed: int = None) -> list:
+    #        eval_pbbs, eval_loss, posterior_samples, eval_total_gain = self.eval_simulation(
+    #            sim_count, seed
+    #        )
+    #
+    #        return list(posterior_samples)
 
     def add_variant_data_agg(
         self,
@@ -220,22 +272,6 @@ class DeltaLognormalDataTest(BaseDataTest):
         if totals < positives:
             raise ValueError("Not possible to have more positives than totals!")
 
-        ### POSTERIORS
-        a_post_beta = positives + a_prior_beta
-        b_post_beta = totals - positives + b_prior_beta
-
-        x_bar = sum_logs / positives
-        a_post_ig = a_prior_ig + (positives / 2)
-        b_post_ig = (
-            b_prior_ig
-            + (1 / 2) * (sum_logs_2 - 2 * sum_logs * x_bar + positives * (x_bar**2))
-            + ((positives * w_prior) / (2 * (positives + w_prior)))
-            * ((x_bar - m_prior) ** 2)
-        )
-        m_post = (positives * x_bar + w_prior * m_prior) / (positives + w_prior)
-        w_post = w_prior + positives
-        ########
-
         if name in self.variant_names:
             msg = f"Variant {name} already exists - new data is replacing it. "
             logger.info(msg)
@@ -252,12 +288,6 @@ class DeltaLognormalDataTest(BaseDataTest):
             "a_prior_ig": a_prior_ig,
             "b_prior_ig": b_prior_ig,
             "w_prior": w_prior,
-            "a_post_beta": a_post_beta,
-            "b_post_beta": b_post_beta,
-            "a_post_ig": a_post_ig,
-            "b_post_ig": b_post_ig,
-            "m_post": m_post,
-            "w_post": w_post,
         }
 
     def add_variant_data(
