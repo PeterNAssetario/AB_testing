@@ -1,5 +1,4 @@
 git+ssh://git@github.com/assetario/ml-lib.git@v0.3.3
-bayesian-testing==0.3.0
 streamlit==1.6
 altair>=4.1.0
 scipy>=1.7.2

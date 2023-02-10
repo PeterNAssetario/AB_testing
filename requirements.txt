@@ -41,8 +41,6 @@ backports-zoneinfo==0.2.1
     #   tzlocal
 base58==2.1.1
     # via streamlit
-bayesian-testing==0.3.0
-    # via -r requirements.in
 beautifulsoup4==4.11.1
     # via redshift-connector
 black==22.10.0
