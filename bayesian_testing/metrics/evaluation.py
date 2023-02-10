@@ -1,15 +1,15 @@
-from numbers import Number
+import pdb
 from typing import List, Tuple, Union
+from numbers import Number
 
 import numpy as np
 
+from bayesian_testing.utilities import get_logger
 from bayesian_testing.metrics.posteriors import (
+    normal_posteriors,
     beta_posteriors_all,
     lognormal_posteriors,
-    normal_posteriors,
-    dirichlet_posteriors,
 )
-from bayesian_testing.utilities import get_logger
 
 logger = get_logger("bayesian_testing")
 
@@ -19,19 +19,19 @@ def validate_bernoulli_input(totals: List[int], positives: List[int]) -> None:
     Simple validation for pbb_bernoulli_agg inputs.
     """
     if len(totals) != len(positives):
-        msg = f"Totals ({totals}) and positives ({positives}) needs to have same length!"
+        msg = (
+            f"Totals ({totals}) and positives ({positives}) needs to have same length!"
+        )
         logger.error(msg)
         raise ValueError(msg)
 
 
-def estimate_probabilities(data: Union[List[List[Number]], np.ndarray]) -> List[float]:
+def estimate_probabilities(data: Union[List[List[float]], np.ndarray]) -> List[float]:
     """
     Estimate probabilities for variants considering simulated data from respective posteriors.
-
     Parameters
     ----------
     data : List of simulated data for each variant.
-
     Returns
     -------
     res : List of probabilities of being best for each variant.
@@ -46,14 +46,12 @@ def estimate_probabilities(data: Union[List[List[Number]], np.ndarray]) -> List[
     return res
 
 
-def estimate_expected_loss(data: Union[List[List[Number]], np.ndarray]) -> List[float]:
+def estimate_expected_loss(data: Union[List[List[float]], np.ndarray]) -> List[float]:
     """
     Estimate expected losses for variants considering simulated data from respective posteriors.
-
     Parameters
     ----------
     data : List of simulated data for each variant.
-
     Returns
     -------
     res : List of expected loss for each variant.
@@ -63,18 +61,35 @@ def estimate_expected_loss(data: Union[List[List[Number]], np.ndarray]) -> List[
     return res
 
 
+# TODO: For now this only works for the case of two variants and not more
+def estimate_expected_total_gain(
+    data: Union[List[List[float]], np.ndarray]
+) -> List[float]:
+    """
+    Estimate expected total gain for variants considering simulated data from respective posteriors.
+    Parameters
+    ----------
+    data : List of simulated data for each variant.
+    Returns
+    -------
+    res : List of expected total gains for each variant.
+    """
+    # pdb.set_trace()
+    res = list(np.mean(data - data[[1, 0], :], axis=1).round(7))
+    return res
+
+
 def eval_bernoulli_agg(
     totals: List[int],
     positives: List[int],
-    a_priors_beta: List[Number] = None,
-    b_priors_beta: List[Number] = None,
+    a_priors_beta: List[float] = None,
+    b_priors_beta: List[float] = None,
     sim_count: int = 20000,
     seed: int = None,
-) -> Tuple[List[float], List[float]]:
+) -> Tuple[List[float], List[float], List[float], List[float], List[float]]:
     """
     Method estimating probabilities of being best and expected loss for beta-bernoulli
     aggregated data per variant.
-
     Parameters
     ----------
     totals : List of numbers of experiment observations (e.g. number of sessions) for each variant.
@@ -83,7 +98,6 @@ def eval_bernoulli_agg(
     a_priors_beta : List of prior alpha parameters for Beta distributions for each variant.
     b_priors_beta : List of prior beta parameters for Beta distributions for each variant.
     seed : Random seed.
-
     Returns
     -------
     res_pbbs : List of probabilities of being best for each variant.
@@ -100,86 +114,15 @@ def eval_bernoulli_agg(
     if not b_priors_beta:
         b_priors_beta = [0.5] * len(totals)
 
-    beta_samples = beta_posteriors_all(
+    beta_samples, a_posteriors_beta, b_posteriors_beta = beta_posteriors_all(
         totals, positives, sim_count, a_priors_beta, b_priors_beta, seed
     )
 
     res_pbbs = estimate_probabilities(beta_samples)
     res_loss = estimate_expected_loss(beta_samples)
+    res_total_gain = estimate_expected_total_gain(beta_samples)
 
-    return res_pbbs, res_loss
-
-
-def eval_normal_agg(
-    totals: List[int],
-    sums: List[float],
-    sums_2: List[float],
-    sim_count: int = 20000,
-    m_priors: List[Number] = None,
-    a_priors_ig: List[Number] = None,
-    b_priors_ig: List[Number] = None,
-    w_priors: List[Number] = None,
-    seed: int = None,
-) -> Tuple[List[float], List[float]]:
-    """
-    Method estimating probabilities of being best and expected loss for normal
-    aggregated data per variant.
-
-    Parameters
-    ----------
-    totals : List of numbers of experiment observations for each variant.
-    sums : List of sum of original data for each variant.
-    sums_2 : List of sum of squares of original data for each variant.
-    sim_count : Number of simulations.
-    m_priors : List of prior means for each variant.
-    a_priors_ig : List of prior alphas from inverse gamma dist approximating variance.
-    b_priors_ig : List of prior betas from inverse gamma dist approximating variance.
-    w_priors : List of prior effective sample sizes for each variant.
-    seed : Random seed.
-
-    Returns
-    -------
-    res_pbbs : List of probabilities of being best for each variant.
-    res_loss : List of expected loss for each variant.
-    """
-    if len(totals) == 0:
-        return [], []
-    # Same default priors for all variants if they are not provided.
-    if not m_priors:
-        m_priors = [1] * len(totals)
-    if not a_priors_ig:
-        a_priors_ig = [0] * len(totals)
-    if not b_priors_ig:
-        b_priors_ig = [0] * len(totals)
-    if not w_priors:
-        w_priors = [0.01] * len(totals)
-
-    # we will need different generators for each call of normal_posteriors
-    # (so they are not perfectly correlated)
-    ss = np.random.SeedSequence(seed)
-    child_seeds = ss.spawn(len(totals))
-
-    normal_samples = np.array(
-        [
-            normal_posteriors(
-                totals[i],
-                sums[i],
-                sums_2[i],
-                sim_count,
-                m_priors[i],
-                a_priors_ig[i],
-                b_priors_ig[i],
-                w_priors[i],
-                child_seeds[i],
-            )[0]
-            for i in range(len(totals))
-        ]
-    )
-
-    res_pbbs = estimate_probabilities(normal_samples)
-    res_loss = estimate_expected_loss(normal_samples)
-
-    return res_pbbs, res_loss
+    return res_pbbs, res_loss, res_total_gain, a_posteriors_beta, b_posteriors_beta
 
 
 def eval_delta_lognormal_agg(
@@ -188,18 +131,27 @@ def eval_delta_lognormal_agg(
     sum_logs: List[float],
     sum_logs_2: List[float],
     sim_count: int = 20000,
-    a_priors_beta: List[Number] = None,
-    b_priors_beta: List[Number] = None,
-    m_priors: List[Number] = None,
-    a_priors_ig: List[Number] = None,
-    b_priors_ig: List[Number] = None,
-    w_priors: List[Number] = None,
+    a_priors_beta: List[float] = None,
+    b_priors_beta: List[float] = None,
+    m_priors: List[float] = None,
+    a_priors_ig: List[float] = None,
+    b_priors_ig: List[float] = None,
+    w_priors: List[float] = None,
     seed: int = None,
-) -> Tuple[List[float], List[float], list]:
+) -> Tuple[
+    List[float],
+    List[float],
+    List[float],
+    List[float],
+    List[float],
+    List[float],
+    List[float],
+    List[float],
+    List[float],
+]:
     """
     Method estimating probabilities of being best and expected loss for delta-lognormal
     aggregated data per variant. For that reason, the method works with both totals and non_zeros.
-
     Parameters
     ----------
     totals : List of numbers of experiment observations (e.g. number of sessions) for each variant.
@@ -214,14 +166,14 @@ def eval_delta_lognormal_agg(
     b_priors_ig : List of prior betas from inverse gamma dist approximating variance of logarithms.
     w_priors : List of prior effective sample sizes for each variant.
     seed : Random seed.
-
     Returns
     -------
     res_pbbs : List of probabilities of being best for each variant.
     res_loss : List of expected loss for each variant.
+    res_total_gain: List of expected total gain for each variant.
     """
     if len(totals) == 0:
-        return [], []
+        return [], [], [], [], [], [], [], [], []
     # Same default priors for all variants if they are not provided.
     if not a_priors_beta:
         a_priors_beta = [0.5] * len(totals)
@@ -240,86 +192,62 @@ def eval_delta_lognormal_agg(
         # if only zeros in all variants
         res_pbbs = list(np.full(len(totals), round(1 / len(totals), 7)))
         res_loss = [np.nan] * len(totals)
-        return res_pbbs, res_loss
+        return (
+            res_pbbs,
+            res_loss,
+        )
     else:
         # we will need different generators for each call of lognormal_posteriors
         ss = np.random.SeedSequence(seed)
         child_seeds = ss.spawn(len(totals) + 1)
 
-        beta_samples = beta_posteriors_all(
+        beta_samples, a_posteriors_beta, b_posteriors_beta = beta_posteriors_all(
             totals, non_zeros, sim_count, a_priors_beta, b_priors_beta, child_seeds[0]
         )
 
-        lognormal_samples = np.array(
-            [
-                lognormal_posteriors(
-                    non_zeros[i],
-                    sum_logs[i],
-                    sum_logs_2[i],
-                    sim_count,
-                    m_priors[i],
-                    a_priors_ig[i],
-                    b_priors_ig[i],
-                    w_priors[i],
-                    child_seeds[1 + i],
-                )
-                for i in range(len(totals))
-            ]
-        )
+        lognorm_samples_and_post_vals = [
+            lognormal_posteriors(
+                non_zeros[i],
+                sum_logs[i],
+                sum_logs_2[i],
+                sim_count,
+                m_priors[i],
+                a_priors_ig[i],
+                b_priors_ig[i],
+                w_priors[i],
+                child_seeds[1 + i],
+            )
+            for i in range(len(totals))
+        ]
 
-        combined_samples = beta_samples * lognormal_samples
+        lognorm_samples = [
+            lognorm_samples_and_post_vals[i][0] for i in range(len(totals))
+        ]
+        a_posteriors_ig = [
+            lognorm_samples_and_post_vals[i][1] for i in range(len(totals))
+        ]
+        b_posteriors_ig = [
+            lognorm_samples_and_post_vals[i][2] for i in range(len(totals))
+        ]
+        w_posteriors = [lognorm_samples_and_post_vals[i][3] for i in range(len(totals))]
+        m_posteriors = [lognorm_samples_and_post_vals[i][4] for i in range(len(totals))]
+
+        # pdb.set_trace()
+
+        combined_samples = beta_samples * lognorm_samples
 
         res_pbbs = estimate_probabilities(combined_samples)
         res_loss = estimate_expected_loss(combined_samples)
+        res_total_gain = estimate_expected_total_gain(combined_samples)
 
-        return res_pbbs, res_loss, combined_samples
-
-
-def eval_numerical_dirichlet_agg(
-    states: List[Union[float, int]],
-    concentrations: List[List[int]],
-    prior_alphas: List[List[Union[float, int]]] = None,
-    sim_count: int = 20000,
-    seed: int = None,
-):
-    """
-    Method estimating probabilities of being best and expected loss for dirichlet-multinomial
-    aggregated data per variant. States in this case are expected to be a numerical values
-    (e.g. dice numbers, number of stars in a rating, etc.).
-
-    Parameters
-    ----------
-    states : All possible outcomes in given multinomial distribution.
-    concentrations : Concentration of observations for each state for all variants.
-    prior_alphas : Prior alpha values for each state for all variants.
-    sim_count : Number of simulations.
-    seed : Random seed.
-
-    Returns
-    -------
-    res_pbbs : List of probabilities of being best for each variant.
-    res_loss : List of expected loss for each variant.
-    """
-    if len(concentrations) == 0:
-        return [], []
-
-    # default prior will be expecting 1 observation in all states for all variants
-    if not prior_alphas:
-        prior_alphas = [[1] * len(states) for i in range(len(concentrations))]
-
-    # we will need different generators for each call of dirichlet_posteriors
-    ss = np.random.SeedSequence(seed)
-    child_seeds = ss.spawn(len(concentrations))
-
-    means_samples = []
-    for i in range(len(concentrations)):
-        dir_post = dirichlet_posteriors(
-            concentrations[i], prior_alphas[i], sim_count, child_seeds[i]
-        )
-        means = np.sum(np.multiply(dir_post, np.array(states)), axis=1)
-        means_samples.append(list(means))
-
-    res_pbbs = estimate_probabilities(means_samples)
-    res_loss = estimate_expected_loss(means_samples)
-
-    return res_pbbs, res_loss
+    return (
+        res_pbbs,
+        res_loss,
+        res_total_gain,
+        a_posteriors_beta,
+        b_posteriors_beta,
+        a_posteriors_ig,
+        b_posteriors_ig,
+        w_posteriors,
+        m_posteriors,
+    )
