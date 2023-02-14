@@ -1,7 +1,4 @@
-import os
-import pdb
 from enum import Enum
-from typing import Optional
 from datetime import datetime, timedelta
 
 import boto3
@@ -11,9 +8,6 @@ from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
 from pydantic import BaseSettings, Extra
 
 from bayesian_testing.experiments import DeltaLognormalDataTest
-
-OUTPUT_TEMP_FILE_NAME = "temp_ab_testing_output.json"
-
 
 class PossibleCompanyIds(str, Enum):
     century_games = "century_games_ncmgu"
@@ -380,20 +374,23 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
     return output_df
 
 
-def upload_output_to_s3(output: pd.DataFrame):
-    output.to_json(OUTPUT_TEMP_FILE_NAME, orient="records", lines=True)
-
+def upload_output_to_s3(output: pd.DataFrame, bucket: str, key: str):
     s3 = boto3.client("s3")
-    s3.upload_file(
-        OUTPUT_TEMP_FILE_NAME,
-        config.output_bucket,
-        config.output_key,
+
+    output_json = output.to_json(None, orient="records", lines=True)
+    s3.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=output_json,
     )
-    os.remove(OUTPUT_TEMP_FILE_NAME)
 
 
 if __name__ == "__main__":
 
     config = AbTestEvaluationConfig()
     ab_testing_output = run_ab_testing(config)
-    upload_output_to_s3(ab_testing_output)
+    upload_output_to_s3(
+        output=ab_testing_output,
+        bucket=config.output_bucket,
+        key=config.output_key
+    )
