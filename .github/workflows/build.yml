@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_BUILDKIT: 1
-      REPOSITORY_NAME: assetario/ab-testing
+      REPOSITORY_NAME: assetario/ab-testing-evaluation
     steps:
       - uses: actions/checkout@v3
 
