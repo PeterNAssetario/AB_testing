@@ -8,8 +8,11 @@ import boto3
 import pandas as pd
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
+from pydantic import BaseSettings, Extra
 
 from bayesian_testing.experiments import DeltaLognormalDataTest
+
+OUTPUT_TEMP_FILE_NAME = "temp_ab_testing_output.json"
 
 
 class PossibleCompanyIds(str, Enum):
@@ -35,81 +38,90 @@ class PossibleDatapointTypes(str, Enum):
     )
 
 
-def run_ab_testing(
-    start_date: str,
-    end_date: str,
-    company_id: PossibleCompanyIds,
-    project_id: PossibleProjectIds,
-    test_name: str,
-    ab_test_id: str,
-    personalized: bool,
-    winsorized: bool,
-    datapoint_type: PossibleDatapointTypes,
-    min_first_login_date: str,
-    max_first_login_date: str,
-    n_days_spend: int,
-    variant_name_1: str,
-    variant_name_2: str,
-    a_prior_beta_1: float,
-    a_prior_beta_2: float,
-    b_prior_beta_1: float,
-    b_prior_beta_2: float,
-    m_prior_1: float,
-    m_prior_2: float,
-    a_prior_ig_1: float,
-    a_prior_ig_2: float,
-    b_prior_ig_1: float,
-    b_prior_ig_2: float,
-    w_prior_1: float,
-    w_prior_2: float,
-    initial_test_start_date: str,
-) -> pd.DataFrame:
-    configure_offline_feature_store(workgroup="development", catalog_name="production")
+class AbTestEvaluationConfig(
+        BaseSettings,
+        extra=Extra.forbid,
+        env_prefix="AB_TESTING_EVALUATION_PARAM_",
+        case_sensitive=False):
+    company_id: PossibleCompanyIds
+    project_id: PossibleProjectIds
+    test_name: str
+    ab_test_id: str
+    start_date: str
+    end_date: str
+    winsorized: bool
+    personalized: bool
+    datapoint_type: PossibleDatapointTypes
+    n_days_spend: int
+    min_first_login_date: str
+    max_first_login_date: str
+    variant_name_1: str
+    variant_name_2: str
+    a_prior_beta_1: float
+    a_prior_beta_2: float
+    b_prior_beta_1: float
+    b_prior_beta_2: float
+    m_prior_1: float
+    m_prior_2: float
+    a_prior_ig_1: float
+    a_prior_ig_2: float
+    b_prior_ig_1: float
+    b_prior_ig_2: float
+    w_prior_1: float
+    w_prior_2: float
+    initial_test_start_date: str
+    output_bucket: str
+    output_key: str
+
+
+def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
+    configure_offline_feature_store(
+        workgroup="development", catalog_name="production")
 
     # create dict for saving the test definition
     test_definition_dict = {
-        "company_id": company_id.value,
-        "project_id": project_id.value,
-        "test_name": test_name,
-        "ab_test_id": ab_test_id,
-        "intitial_test_start_date": initial_test_start_date,
-        "personalized": personalized,
-        "winsorized": winsorized,
-        "datapoint_type": datapoint_type.value,
-        "min_first_login_date": min_first_login_date,
-        "max_first_login_date": max_first_login_date,
+        "company_id": config.company_id.value,
+        "project_id": config.project_id.value,
+        "test_name": config.test_name,
+        "ab_test_id": config.ab_test_id,
+        "intitial_test_start_date": config.initial_test_start_date,
+        "personalized": config.personalized,
+        "winsorized": config.winsorized,
+        "datapoint_type": config.datapoint_type.value,
+        "min_first_login_date": config.min_first_login_date,
+        "max_first_login_date": config.max_first_login_date,
     }
 
     # prepare query params
-    if personalized:
+    if config.personalized:
         personalized_num: int = 0
     else:
         personalized_num = 9
 
-    if winsorized:
+    if config.winsorized:
         spend_column: str = "spend"
     else:
         spend_column = "wins_spend"
 
-    if project_id in ["spongebob_x7d9q", "terragenesis_m89uz"]:
+    if config.project_id in ["spongebob_x7d9q", "terragenesis_m89uz"]:
         spending_line = f", SUM({spend_column}) as total_spend"
     else:
         spending_line = f", COALESCE(SUM(CASE WHEN fl_personalized_offer_spend <> {personalized_num} THEN {spend_column} END), 0) total_spend"
 
-    if n_days_spend:
-        spend_offset = str(n_days_spend - 1)
+    if config.n_days_spend:
+        spend_offset = str(config.n_days_spend - 1)
 
     # check whether it isn't too early to perform the test
     too_early_to_run_test = False
-    end_date_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+    end_date_datetime = datetime.strptime(config.end_date, "%Y-%m-%d")
     initial_test_start_date_datetime = datetime.strptime(
-        initial_test_start_date, "%Y-%m-%d"
+        config.initial_test_start_date, "%Y-%m-%d"
     )
-    if datapoint_type == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date:
+    if config.datapoint_type == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date:
         if end_date_datetime < initial_test_start_date_datetime:
             too_early_to_run_test = True
     elif (
-        datapoint_type
+        config.datapoint_type
         == PossibleDatapointTypes.one_datapoint_per_user_first_n_day_spend
     ):
         if (
@@ -156,20 +168,20 @@ def run_ab_testing(
 
         output_dict = {
             "inputs": inputs_dict,
-            "name_variant_1": variant_name_1,
-            "name_variant_2": variant_name_2,
-            "a_post_beta_variant_1": a_prior_beta_1,
-            "a_post_beta_variant_2": a_prior_beta_2,
-            "b_post_beta_variant_1": b_prior_beta_1,
-            "b_post_beta_variant_2": b_prior_beta_2,
-            "m_post_variant_1": m_prior_1,
-            "m_post_variant_2": m_prior_2,
-            "a_post_ig_variant_1": a_prior_ig_1,
-            "a_post_ig_variant_2": a_prior_ig_2,
-            "b_post_ig_variant_1": b_prior_ig_1,
-            "b_post_ig_variant_2": b_prior_ig_2,
-            "w_post_variant_1": w_prior_1,
-            "w_post_variant_2": w_prior_2,
+            "name_variant_1": config.variant_name_1,
+            "name_variant_2": config.variant_name_2,
+            "a_post_beta_variant_1": config.a_prior_beta_1,
+            "a_post_beta_variant_2": config.a_prior_beta_2,
+            "b_post_beta_variant_1": config.b_prior_beta_1,
+            "b_post_beta_variant_2": config.b_prior_beta_2,
+            "m_post_variant_1": config.m_prior_1,
+            "m_post_variant_2": config.m_prior_2,
+            "a_post_ig_variant_1": config.a_prior_ig_1,
+            "a_post_ig_variant_2": config.a_prior_ig_2,
+            "b_post_ig_variant_1": config.b_prior_ig_1,
+            "b_post_ig_variant_2": config.b_prior_ig_2,
+            "w_post_variant_1": config.w_prior_1,
+            "w_post_variant_2": config.w_prior_2,
             "results": results_dict,
             "test_definition": test_definition_dict,
         }
@@ -178,7 +190,7 @@ def run_ab_testing(
 
         return output_df
 
-    if datapoint_type == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date:
+    if config.datapoint_type == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date:
         data_query = f"""
             WITH
                 base_table AS (
@@ -190,9 +202,9 @@ def run_ab_testing(
                             WHEN group_tag = 'personalized' THEN 'P'
                         END                                                                              test_group
                         {spending_line}
-                    FROM analytics__{company_id}__{project_id}.user_level_performance
-                    WHERE meta_date  BETWEEN  DATE '{start_date}' AND  DATE '{end_date}'
-                    AND first_login BETWEEN DATE '{min_first_login_date}' AND DATE '{max_first_login_date}'
+                    FROM analytics__{config.company_id}__{config.project_id}.user_level_performance
+                    WHERE meta_date  BETWEEN  DATE '{config.start_date}' AND  DATE '{config.end_date}'
+                    AND first_login BETWEEN DATE '{config.min_first_login_date}' AND DATE '{config.max_first_login_date}'
                     GROUP BY user_id
                         , meta_date
                         , first_login
@@ -209,7 +221,7 @@ def run_ab_testing(
             FROM base_table
             GROUP BY test_group;"""
     elif (
-        datapoint_type
+        config.datapoint_type
         == PossibleDatapointTypes.one_datapoint_per_user_first_n_day_spend
     ):
         data_query = f"""
@@ -222,9 +234,9 @@ def run_ab_testing(
                         WHEN group_tag = 'personalized' THEN 'P'
                     END                             test_group
                     {spending_line}
-                FROM analytics__{company_id}__{project_id}.user_level_performance
-                WHERE first_login BETWEEN  DATE '{start_date}' - INTERVAL '{spend_offset}' DAY AND  DATE '{end_date}' - INTERVAL '{spend_offset}' DAY
-                AND first_login >= DATE '{min_first_login_date}'
+                FROM analytics__{config.company_id}__{config.project_id}.user_level_performance
+                WHERE first_login BETWEEN  DATE '{config.start_date}' - INTERVAL '{spend_offset}' DAY AND  DATE '{config.end_date}' - INTERVAL '{spend_offset}' DAY
+                AND first_login >= DATE '{config.min_first_login_date}'
                 GROUP BY user_id
                     , meta_date
                     , first_login
@@ -259,8 +271,10 @@ def run_ab_testing(
     if data_df.empty:
         raise Exception("No data available for the provided inputs")
 
-    data_variant_1 = data_df[(data_df.test_group == variant_name_1)].squeeze()
-    data_variant_2 = data_df[(data_df.test_group == variant_name_2)].squeeze()
+    data_variant_1 = data_df[(data_df.test_group ==
+                              config.variant_name_1)].squeeze()
+    data_variant_2 = data_df[(data_df.test_group ==
+                              config.variant_name_2)].squeeze()
 
     # input params gotten through a query
     totals_1 = data_variant_1["totals"]
@@ -277,32 +291,32 @@ def run_ab_testing(
     # testing
     test_revenue = DeltaLognormalDataTest()
     test_revenue.add_variant_data_agg(
-        name=variant_name_1,
+        name=config.variant_name_1,
         totals=totals_1,
         positives=positives_1,
         sum_values=sum_values_1,
         sum_logs=sum_logs_1,
         sum_logs_2=sum_logs_squared_1,
-        a_prior_beta=a_prior_beta_1,
-        b_prior_beta=b_prior_beta_1,
-        m_prior=m_prior_1,
-        a_prior_ig=a_prior_ig_1,
-        b_prior_ig=b_prior_ig_1,
-        w_prior=w_prior_1,
+        a_prior_beta=config.a_prior_beta_1,
+        b_prior_beta=config.b_prior_beta_1,
+        m_prior=config.m_prior_1,
+        a_prior_ig=config.a_prior_ig_1,
+        b_prior_ig=config.b_prior_ig_1,
+        w_prior=config.w_prior_1,
     )
     test_revenue.add_variant_data_agg(
-        name=variant_name_2,
+        name=config.variant_name_2,
         totals=totals_2,
         positives=positives_2,
         sum_values=sum_values_2,
         sum_logs=sum_logs_2,
         sum_logs_2=sum_logs_squared_2,
-        a_prior_beta=a_prior_beta_2,
-        b_prior_beta=b_prior_beta_2,
-        m_prior=m_prior_2,
-        a_prior_ig=a_prior_ig_2,
-        b_prior_ig=b_prior_ig_2,
-        w_prior=w_prior_2,
+        a_prior_beta=config.a_prior_beta_2,
+        b_prior_beta=config.b_prior_beta_2,
+        m_prior=config.m_prior_2,
+        a_prior_ig=config.a_prior_ig_2,
+        b_prior_ig=config.b_prior_ig_2,
+        w_prior=config.w_prior_2,
     )
     res_revenue_test = test_revenue.evaluate(seed=42)
 
@@ -317,18 +331,18 @@ def run_ab_testing(
         "sum_logs_variant_2": sum_logs_2,
         "sum_logs_squared_variant_1": sum_logs_squared_1,
         "sum_logs_squared_variant_2": sum_logs_squared_2,
-        "a_prior_beta_variant_1": a_prior_beta_1,
-        "a_prior_beta_variant_2": a_prior_beta_2,
-        "b_prior_beta_variant_1": b_prior_beta_1,
-        "b_prior_beta_variant_2": b_prior_beta_2,
-        "m_prior_variant_1": m_prior_1,
-        "m_prior_variant_2": m_prior_2,
-        "a_prior_ig_variant_1": a_prior_ig_1,
-        "a_prior_ig_variant_2": a_prior_ig_2,
-        "b_prior_ig_variant_1": b_prior_ig_1,
-        "b_prior_ig_variant_2": b_prior_ig_2,
-        "w_prior_variant_1": w_prior_1,
-        "w_prior_variant_2": w_prior_2,
+        "a_prior_beta_variant_1": config.a_prior_beta_1,
+        "a_prior_beta_variant_2": config.a_prior_beta_2,
+        "b_prior_beta_variant_1": config.b_prior_beta_1,
+        "b_prior_beta_variant_2": config.b_prior_beta_2,
+        "m_prior_variant_1": config.m_prior_1,
+        "m_prior_variant_2": config.m_prior_2,
+        "a_prior_ig_variant_1": config.a_prior_ig_1,
+        "a_prior_ig_variant_2": config.a_prior_ig_2,
+        "b_prior_ig_variant_1": config.b_prior_ig_1,
+        "b_prior_ig_variant_2": config.b_prior_ig_2,
+        "w_prior_variant_1": config.w_prior_1,
+        "w_prior_variant_2": config.w_prior_2,
     }
 
     results_dict = {
@@ -343,8 +357,8 @@ def run_ab_testing(
 
     output_dict = {
         "inputs": inputs_dict,
-        "name_variant_1": variant_name_1,
-        "name_variant_2": variant_name_2,
+        "name_variant_1": config.variant_name_1,
+        "name_variant_2": config.variant_name_2,
         "a_post_beta_variant_1": res_revenue_test[0]["a_post_beta"],
         "a_post_beta_variant_2": res_revenue_test[1]["a_post_beta"],
         "b_post_beta_variant_1": res_revenue_test[0]["b_post_beta"],
@@ -366,73 +380,20 @@ def run_ab_testing(
     return output_df
 
 
-if __name__ == "__main__":
-    company_id = os.environ["COMPANY_ID"]
-    project_id = os.environ["PROJECT_ID"]
-    test_name = os.environ["NAME"]
-    ab_test_id = os.environ["AB_TEST_ID"]
-    start_date = os.environ["TEST_START_DATE"]
-    end_date = os.environ["TEST_END_DATE"]
-    winsorized = bool(os.environ["WINSORIZED_SPEND"])
-    personalized = bool(os.environ["PERSONALIZED_SPEND"])
-    datapoint_type = os.environ["DATAPOINT_TYPE"]
-    n_days_spend = int(os.environ["N_DAYS_SPEND"])
-    min_first_login_date = os.environ["MIN_FIRST_LOGIN_DATE"]
-    max_first_login_date = os.environ["MAX_FIRST_LOGIN_DATE"]
-    variant_name_1 = os.environ["VARIANT1_NAME"]
-    variant_name_2 = os.environ["VARIANT2_NAME"]
-    a_prior_beta_1 = float(os.environ["VARIANT1_PRIOR_A_BETA"])
-    a_prior_beta_2 = float(os.environ["VARIANT1_PRIOR_A_BETA"])
-    b_prior_beta_1 = float(os.environ["VARIANT1_PRIOR_B_BETA"])
-    b_prior_beta_2 = float(os.environ["VARIANT1_PRIOR_B_BETA"])
-    m_prior_1 = float(os.environ["VARIANT1_PRIOR_MU"])
-    m_prior_2 = float(os.environ["VARIANT2_PRIOR_MU"])
-    a_prior_ig_1 = float(os.environ["VARIANT1_PRIOR_A_IG"])
-    a_prior_ig_2 = float(os.environ["VARIANT2_PRIOR_A_IG"])
-    b_prior_ig_1 = float(os.environ["VARIANT1_PRIOR_B_IG"])
-    b_prior_ig_2 = float(os.environ["VARIANT2_PRIOR_B_IG"])
-    w_prior_1 = float(os.environ["VARIANT1_PRIOR_W"])
-    w_prior_2 = float(os.environ["VARIANT2_PRIOR_W"])
-    initial_test_start_date = os.environ["INITIAL_TEST_START_DATE"]
-    output_location = os.environ["OUTPUT_LOCATION"]
-    output_file_name = os.environ["OUTPUT_FILE_NAME"]
-
-    ab_testing_output = run_ab_testing(
-        start_date=start_date,
-        end_date=end_date,
-        company_id=PossibleCompanyIds(company_id),
-        project_id=PossibleProjectIds(project_id),
-        test_name=test_name,
-        ab_test_id=ab_test_id,
-        personalized=personalized,
-        winsorized=winsorized,
-        datapoint_type=PossibleDatapointTypes(datapoint_type),
-        min_first_login_date=min_first_login_date,
-        max_first_login_date=max_first_login_date,
-        n_days_spend=n_days_spend,
-        variant_name_1=variant_name_1,
-        variant_name_2=variant_name_2,
-        a_prior_beta_1=a_prior_beta_1,
-        a_prior_beta_2=a_prior_beta_2,
-        b_prior_beta_1=b_prior_beta_1,
-        b_prior_beta_2=b_prior_beta_2,
-        m_prior_1=m_prior_1,
-        m_prior_2=m_prior_2,
-        a_prior_ig_1=a_prior_ig_1,
-        a_prior_ig_2=a_prior_ig_2,
-        b_prior_ig_1=b_prior_ig_1,
-        b_prior_ig_2=b_prior_ig_2,
-        w_prior_1=w_prior_1,
-        w_prior_2=w_prior_2,
-        initial_test_start_date=initial_test_start_date,
-    )
-
-    ab_testing_output.to_parquet("temp_ab_testing_output.parquet")
+def upload_output_to_s3(output: pd.DataFrame):
+    output.to_json(OUTPUT_TEMP_FILE_NAME, orient="records", lines=True)
 
     s3 = boto3.client("s3")
     s3.upload_file(
-        "temp_ab_testing_output.parquet",
-        output_location,
-        output_file_name,
+        OUTPUT_TEMP_FILE_NAME,
+        config.output_bucket,
+        config.output_key,
     )
-    os.remove("temp_ab_testing_output.parquet")
+    os.remove(OUTPUT_TEMP_FILE_NAME)
+
+
+if __name__ == "__main__":
+
+    config = AbTestEvaluationConfig()
+    ab_testing_output = run_ab_testing(config)
+    upload_output_to_s3(ab_testing_output)
