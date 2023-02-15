@@ -25,8 +25,7 @@ ADD requirements.txt ./
 RUN --mount=type=ssh pip3 install -r requirements.txt
 
 COPY scripts/entrypoint.sh /opt/app/entrypoint.sh
-COPY main_testing_script.py /opt/app/main_testing_script.py
-COPY bayesian_testing/ /opt/app/bayesian_testing/
+COPY ab_testing_evaluation/ /opt/app/ab_testing_evaluation/
 
 WORKDIR /opt/app
 ENV PYTHONPATH /opt/app

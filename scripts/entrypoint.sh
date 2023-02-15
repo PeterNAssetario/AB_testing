@@ -1,3 +1,3 @@
 #!/bin/bash -e
 
-python3 main_testing_script.py 
+python3 ab_testing_evaluation/__main__.py 

@@ -9,6 +9,7 @@ from pydantic import BaseSettings, Extra
 
 from bayesian_testing.experiments import DeltaLognormalDataTest
 
+
 class PossibleCompanyIds(str, Enum):
     century_games = "century_games_ncmgu"
     tinysoft = "tinysoft_a9kwp"
@@ -382,15 +383,4 @@ def upload_output_to_s3(output: pd.DataFrame, bucket: str, key: str):
         Bucket=bucket,
         Key=key,
         Body=output_json,
-    )
-
-
-if __name__ == "__main__":
-
-    config = AbTestEvaluationConfig()
-    ab_testing_output = run_ab_testing(config)
-    upload_output_to_s3(
-        output=ab_testing_output,
-        bucket=config.output_bucket,
-        key=config.output_key
     )
