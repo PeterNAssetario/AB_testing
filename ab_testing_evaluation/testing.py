@@ -70,9 +70,6 @@ class AbTestEvaluationConfig(
 
 
 def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
-    configure_offline_feature_store(
-        workgroup="development", catalog_name="production")
-
     # create dict for saving the test definition
     test_definition_dict = {
         "company_id": config.company_id.value,
