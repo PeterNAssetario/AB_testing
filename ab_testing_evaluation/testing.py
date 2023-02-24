@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 
 import boto3
 import pandas as pd
-from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
 from pydantic import BaseSettings, Extra
 
@@ -11,20 +10,19 @@ from bayesian_testing.experiments import DeltaLognormalDataTest
 
 
 class PossibleCompanyIds(str, Enum):
-    century_games = "century_games_ncmgu"
-    tinysoft = "tinysoft_a9kwp"
-    tilting_point = "tilting_point_mjs4k"
-    sparkgaming = "sparkgaming_vjv6s"
+    century_games = "century-games-ncmgu"
+    tinysoft = "tinysoft-a9kwp"
+    tilting_point = "tilting-point-mjs4k"
+    sparkgaming = "sparkgaming-vjv6s"
 
 
 class PossibleProjectIds(str, Enum):
-    spongebob = "spongebob_x7d9q"
-    terragenesis = "terragenesis_m89uz"
-    idle_mafia = "idle_mafia_ecbqb"
-    bingo_aloha = "bingo_aloha_r3g9v"
-    ultimatex = "ultimate_x_poker_rib6t"
-    heroes_magic_war = "heroes_magic_war_h2sln"
-
+    spongebob = "spongebob-x7d9q"
+    terragenesis = "terragenesis-m89uz"
+    idle_mafia = "idle-mafia-ecbqb"
+    bingo_aloha = "bingo-aloha-r3g9v"
+    ultimatex = "ultimate-x-poker-rib6t"
+    heroes_magic_war = "heroes-magic-war-h2sln"
 
 class PossibleDatapointTypes(str, Enum):
     one_datapoint_per_user_per_meta_date = "one_datapoint_per_user_per_meta_date"
@@ -84,6 +82,9 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
         "max_first_login_date": config.max_first_login_date,
     }
 
+    sanitized_company_id = config.company_id.replace('-', '_')
+    sanitized_project_id = config.project_id.replace('-', '_')
+
     # prepare query params
     if config.personalized:
         personalized_num: int = 0
@@ -95,7 +96,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
     else:
         spend_column = "wins_spend"
 
-    if config.project_id in ["spongebob_x7d9q", "terragenesis_m89uz"]:
+    if config.project_id in ["spongebob-x7d9q", "terragenesis-m89uz"]:
         spending_line = f", SUM({spend_column}) as total_spend"
     else:
         spending_line = f", COALESCE(SUM(CASE WHEN fl_personalized_offer_spend <> {personalized_num} THEN {spend_column} END), 0) total_spend"
@@ -194,7 +195,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                             WHEN group_tag = 'personalized' THEN 'P'
                         END                                                                              test_group
                         {spending_line}
-                    FROM analytics__{config.company_id}__{config.project_id}.user_level_performance
+                    FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
                     WHERE meta_date  BETWEEN  DATE '{config.start_date}' AND  DATE '{config.end_date}'
                     AND first_login BETWEEN DATE '{config.min_first_login_date}' AND DATE '{config.max_first_login_date}'
                     GROUP BY user_id
@@ -226,7 +227,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                         WHEN group_tag = 'personalized' THEN 'P'
                     END                             test_group
                     {spending_line}
-                FROM analytics__{config.company_id}__{config.project_id}.user_level_performance
+                FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
                 WHERE first_login BETWEEN  DATE '{config.start_date}' - INTERVAL '{spend_offset}' DAY AND  DATE '{config.end_date}' - INTERVAL '{spend_offset}' DAY
                 AND first_login >= DATE '{config.min_first_login_date}'
                 GROUP BY user_id

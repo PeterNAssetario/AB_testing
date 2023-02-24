@@ -1,10 +1,11 @@
 from ab_testing_evaluation.testing import AbTestEvaluationConfig, run_ab_testing
+from ml_lib.feature_store import configure_offline_feature_store
 
 if __name__ == "__main__":
     config = AbTestEvaluationConfig(
-        company_id='tilting_point_mjs4k',
-        project_id='spongebob_x7d9q',
-        test_name='spongebob_test_1',
+        company_id='tilting-point-mjs4k',
+        project_id='spongebob-x7d9q',
+        test_name='spongebob-test-1',
         ab_test_id='test',
         start_date='2022-11-17',
         end_date='2022-11-18',
@@ -32,6 +33,10 @@ if __name__ == "__main__":
         output_bucket='-',
         output_key='-',
     )
+
+    configure_offline_feature_store(
+        workgroup="development", catalog_name="production")
+    
     ab_testing_output = run_ab_testing(config)
 
     print(ab_testing_output)
