@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 
 import boto3
 import pandas as pd
+from pydantic import Extra, BaseSettings
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
-from pydantic import BaseSettings, Extra
 
 from bayesian_testing.experiments import DeltaLognormalDataTest
 
@@ -24,6 +24,7 @@ class PossibleProjectIds(str, Enum):
     ultimatex = "ultimate-x-poker-rib6t"
     heroes_magic_war = "heroes-magic-war-h2sln"
 
+
 class PossibleDatapointTypes(str, Enum):
     one_datapoint_per_user_per_meta_date = "one_datapoint_per_user_per_meta_date"
     one_datapoint_per_user_first_n_day_spend = (
@@ -32,10 +33,11 @@ class PossibleDatapointTypes(str, Enum):
 
 
 class AbTestEvaluationConfig(
-        BaseSettings,
-        extra=Extra.forbid,
-        env_prefix="AB_TESTING_EVALUATION_PARAM_",
-        case_sensitive=False):
+    BaseSettings,
+    extra=Extra.forbid,
+    env_prefix="AB_TESTING_EVALUATION_PARAM_",
+    case_sensitive=False,
+):
     company_id: PossibleCompanyIds
     project_id: PossibleProjectIds
     test_name: str
@@ -82,8 +84,8 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
         "max_first_login_date": config.max_first_login_date,
     }
 
-    sanitized_company_id = config.company_id.replace('-', '_')
-    sanitized_project_id = config.project_id.replace('-', '_')
+    sanitized_company_id = config.company_id.replace("-", "_")
+    sanitized_project_id = config.project_id.replace("-", "_")
 
     # prepare query params
     if config.personalized:
@@ -110,7 +112,10 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
     initial_test_start_date_datetime = datetime.strptime(
         config.initial_test_start_date, "%Y-%m-%d"
     )
-    if config.datapoint_type == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date:
+    if (
+        config.datapoint_type
+        == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date
+    ):
         if end_date_datetime < initial_test_start_date_datetime:
             too_early_to_run_test = True
     elif (
@@ -183,7 +188,10 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
 
         return output_df
 
-    if config.datapoint_type == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date:
+    if (
+        config.datapoint_type
+        == PossibleDatapointTypes.one_datapoint_per_user_per_meta_date
+    ):
         data_query = f"""
             WITH
                 base_table AS (
@@ -196,7 +204,8 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                         END                                                                              test_group
                         {spending_line}
                     FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
-                    WHERE meta_date  BETWEEN  DATE '{config.start_date}' AND  DATE '{config.end_date}'
+                    WHERE meta_date >= DATE '{config.start_date}' 
+                    AND meta_date < DATE '{config.end_date}'
                     AND first_login BETWEEN DATE '{config.min_first_login_date}' AND DATE '{config.max_first_login_date}'
                     GROUP BY user_id
                         , meta_date
@@ -228,8 +237,8 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                     END                             test_group
                     {spending_line}
                 FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
-                WHERE first_login BETWEEN  DATE '{config.start_date}' - INTERVAL '{spend_offset}' DAY AND  DATE '{config.end_date}' - INTERVAL '{spend_offset}' DAY
-                AND first_login >= DATE '{config.min_first_login_date}'
+                WHERE first_login >= DATE '{config.start_date}' - INTERVAL '{spend_offset}' DAY 
+                AND first_login < DATE '{config.end_date}' - INTERVAL '{spend_offset}' DAY
                 GROUP BY user_id
                     , meta_date
                     , first_login
@@ -264,10 +273,8 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
     if data_df.empty:
         raise Exception("No data available for the provided inputs")
 
-    data_variant_1 = data_df[(data_df.test_group ==
-                              config.variant_name_1)].squeeze()
-    data_variant_2 = data_df[(data_df.test_group ==
-                              config.variant_name_2)].squeeze()
+    data_variant_1 = data_df[(data_df.test_group == config.variant_name_1)].squeeze()
+    data_variant_2 = data_df[(data_df.test_group == config.variant_name_2)].squeeze()
 
     # input params gotten through a query
     totals_1 = data_variant_1["totals"]
