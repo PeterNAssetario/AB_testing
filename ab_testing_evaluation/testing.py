@@ -204,8 +204,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                         END                                                                              test_group
                         {spending_line}
                     FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
-                    WHERE meta_date >= DATE '{config.start_date}' 
-                    AND meta_date < DATE '{config.end_date}'
+                    WHERE meta_date  BETWEEN  DATE '{config.start_date}' AND  DATE '{config.end_date}'
                     AND first_login BETWEEN DATE '{config.min_first_login_date}' AND DATE '{config.max_first_login_date}'
                     GROUP BY user_id
                         , meta_date
@@ -237,8 +236,8 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                     END                             test_group
                     {spending_line}
                 FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
-                WHERE first_login >= DATE '{config.start_date}' - INTERVAL '{spend_offset}' DAY 
-                AND first_login < DATE '{config.end_date}' - INTERVAL '{spend_offset}' DAY
+                WHERE first_login BETWEEN  DATE '{config.start_date}' - INTERVAL '{spend_offset}' DAY AND  DATE '{config.end_date}' - INTERVAL '{spend_offset}' DAY
+                AND first_login >= DATE '{config.min_first_login_date}'
                 GROUP BY user_id
                     , meta_date
                     , first_login
