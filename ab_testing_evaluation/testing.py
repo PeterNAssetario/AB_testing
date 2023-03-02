@@ -80,6 +80,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
         "personalized": config.personalized,
         "winsorized": config.winsorized,
         "datapoint_type": config.datapoint_type.value,
+        "n_days_spend": config.n_days_spend,
         "min_first_login_date": config.min_first_login_date,
         "max_first_login_date": config.max_first_login_date,
     }
