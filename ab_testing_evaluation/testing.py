@@ -155,7 +155,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
         }
 
         results_dict = {
-            "too_early_to_run_test": True,
+            "too_early_to_run_test": too_early_to_run_test,
             "prob_being_best_version_1": None,
             "prob_being_best_version_2": None,
             "expected_loss_version_1": None,
@@ -345,7 +345,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
     }
 
     results_dict = {
-        "too_early_to_run_test": True,
+        "too_early_to_run_test": too_early_to_run_test,
         "prob_being_best_version_1": res_revenue_test[0]["prob_being_best"],
         "prob_being_best_version_2": res_revenue_test[1]["prob_being_best"],
         "expected_loss_version_1": res_revenue_test[0]["expected_loss"],
