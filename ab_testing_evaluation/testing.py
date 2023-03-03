@@ -107,6 +107,11 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
     if config.n_days_spend:
         spend_offset = str(config.n_days_spend - 1)
 
+    if config.project_id == "idle-mafia-ecbqb":
+        table_name = 'user_level_performance_after_1_6_2022'
+    else: 
+        table_name = 'user_level_performance'
+
     # check whether it isn't too early to perform the test
     too_early_to_run_test = False
     end_date_datetime = datetime.strptime(config.end_date, "%Y-%m-%d")
@@ -204,7 +209,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                             WHEN group_tag = 'personalized' THEN 'P'
                         END                                                                              test_group
                         {spending_line}
-                    FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
+                    FROM analytics__{sanitized_company_id}__{sanitized_project_id}.{table_name}
                     WHERE meta_date  BETWEEN  DATE '{config.start_date}' AND  DATE '{config.end_date}'
                     AND first_login BETWEEN DATE '{config.min_first_login_date}' AND DATE '{config.max_first_login_date}'
                     GROUP BY user_id
@@ -236,7 +241,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
                         WHEN group_tag = 'personalized' THEN 'P'
                     END                             test_group
                     {spending_line}
-                FROM analytics__{sanitized_company_id}__{sanitized_project_id}.user_level_performance
+                FROM analytics__{sanitized_company_id}__{sanitized_project_id}.{table_name}
                 WHERE first_login BETWEEN  DATE '{config.start_date}' - INTERVAL '{spend_offset}' DAY AND  DATE '{config.end_date}' - INTERVAL '{spend_offset}' DAY
                 AND first_login >= DATE '{config.min_first_login_date}'
                 GROUP BY user_id
