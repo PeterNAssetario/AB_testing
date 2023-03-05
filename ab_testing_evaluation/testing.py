@@ -162,12 +162,12 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
 
         results_dict = {
             "too_early_to_run_test": too_early_to_run_test,
-            "prob_being_best_version_1": None,
-            "prob_being_best_version_2": None,
-            "expected_loss_version_1": None,
-            "expected_loss_version_2": None,
-            "expected_total_gain_version_1": None,
-            "expected_total_gain_version_2": None,
+            "prob_being_best_variant_1": None,
+            "prob_being_best_variant_2": None,
+            "expected_loss_variant_1": None,
+            "expected_loss_variant_2": None,
+            "expected_total_gain_variant_1": None,
+            "expected_total_gain_variant_2": None,
         }
 
         output_dict = {
@@ -352,12 +352,12 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
 
     results_dict = {
         "too_early_to_run_test": too_early_to_run_test,
-        "prob_being_best_version_1": res_revenue_test[0]["prob_being_best"],
-        "prob_being_best_version_2": res_revenue_test[1]["prob_being_best"],
-        "expected_loss_version_1": res_revenue_test[0]["expected_loss"],
-        "expected_loss_version_2": res_revenue_test[1]["expected_loss"],
-        "expected_total_gain_version_1": res_revenue_test[0]["expected_total_gain"],
-        "expected_total_gain_version_2": res_revenue_test[1]["expected_total_gain"],
+        "prob_being_best_variant_1": res_revenue_test[0]["prob_being_best"],
+        "prob_being_best_variant_2": res_revenue_test[1]["prob_being_best"],
+        "expected_loss_variant_1": res_revenue_test[0]["expected_loss"],
+        "expected_loss_variant_2": res_revenue_test[1]["expected_loss"],
+        "expected_total_gain_variant_1": res_revenue_test[0]["expected_total_gain"],
+        "expected_total_gain_variant_2": res_revenue_test[1]["expected_total_gain"],
     }
 
     output_dict = {
