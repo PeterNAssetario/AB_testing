@@ -107,7 +107,7 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
     if config.n_days_spend:
         spend_offset = str(config.n_days_spend - 1)
 
-    if config.project_id == "idle-mafia-ecbqb":
+    if sanitized_project_id == "idle_mafia_ecbqb":
         table_name = 'user_level_performance_after_1_6_2022'
     else: 
         table_name = 'user_level_performance'
