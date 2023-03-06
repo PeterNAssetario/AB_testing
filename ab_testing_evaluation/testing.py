@@ -95,9 +95,9 @@ def run_ab_testing(config: AbTestEvaluationConfig) -> pd.DataFrame:
         personalized_num = 9
 
     if config.winsorized:
-        spend_column: str = "spend"
+        spend_column: str = "wins_spend"
     else:
-        spend_column = "wins_spend"
+        spend_column = "spend"
 
     if config.project_id in ["spongebob-x7d9q", "terragenesis-m89uz"]:
         spending_line = f", SUM({spend_column}) as total_spend"
