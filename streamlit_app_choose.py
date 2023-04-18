@@ -8,13 +8,14 @@ import seaborn as sns
 import streamlit as st
 import matplotlib as plt
 import scipy.stats
+from datetime import datetime, timedelta
 from scipy.stats import norm
 from ml_lib.feature_store import configure_offline_feature_store
 from ml_lib.feature_store.offline.client import FeatureStoreOfflineClient
 
 from ab_testing.constants import target_col, client_name
 from ab_testing.data_acquisition.acquire_data import queries_dict  # AcquireData
-from ab_testing.predictions.produce_predictions import ProducePredictions
+from ab_testing.predictions.produce_predictions import ProducePredictions, run_ab_testing
 from ab_testing.distribution_fit.fit_distribution import FitDistribution
 
 allow_reuse = True
@@ -60,7 +61,8 @@ ab_default = "test_group"
 result_default = "total_wins_spend"
 spend_default = "personalised"
 
-configure_offline_feature_store(workgroup="development", catalog_name="production")
+#configure_offline_feature_store(workgroup="development", catalog_name="production")
+configure_offline_feature_store(workgroup="primary")
 
 if client_name:
     initial_data = FeatureStoreOfflineClient.run_athena_query_pandas(
@@ -107,7 +109,7 @@ if client_name:
         with set2_col1:
             start_date = st.date_input(
                 "Select Start Date",
-                min_date_val,
+                max_date_val - timedelta(days=30),
                 min_value=min_date_val,
                 max_value=max_date_val,
             )
@@ -168,7 +170,7 @@ if client_name:
             st.warning("Please select both an **A/B column** and a **Result column**.")
             st.stop()
 
-        if len(spend_type) in [0, 2]:
+        if len(spend_type) != 1:
             spend_type = 9
         elif spend_type[0] == "personalised":
             spend_type = 0
@@ -372,3 +374,8 @@ if client_name:
         ]
         output_df2 = output_df2.set_index("Metric")
         table2 = row3_col1.write(output_df2)
+        
+        st.write("## Daily Test Progression:")
+        dates_list = [(start_date + timedelta(days=x)) for x in range((end_date-start_date).days + 1)]
+        print(dates_list)
+        run_ab_testing(initial_data, dates_list)
