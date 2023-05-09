@@ -14,6 +14,7 @@ class PossibleCompanyIds(str, Enum):
     tinysoft = "tinysoft-a9kwp"
     tilting_point = "tilting-point-mjs4k"
     sparkgaming = "sparkgaming-vjv6s"
+    phoenix_games = "phoenix-games-cd8wx"
 
 
 class PossibleProjectIds(str, Enum):
@@ -23,6 +24,7 @@ class PossibleProjectIds(str, Enum):
     bingo_aloha = "bingo-aloha-r3g9v"
     ultimatex = "ultimate-x-poker-rib6t"
     heroes_magic_war = "heroes-magic-war-h2sln"
+    knighthood = "knighthood-v2-ghbch"
 
 
 class PossibleDatapointTypes(str, Enum):
