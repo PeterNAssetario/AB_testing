@@ -15,6 +15,7 @@ class PossibleCompanyIds(str, Enum):
     tilting_point = "tilting-point-mjs4k"
     sparkgaming = "sparkgaming-vjv6s"
     phoenix_games = "phoenix-games-cd8wx"
+    webelinx = "webelinx-ewo7l"
 
 
 class PossibleProjectIds(str, Enum):
@@ -25,6 +26,7 @@ class PossibleProjectIds(str, Enum):
     ultimatex = "ultimate-x-poker-rib6t"
     heroes_magic_war = "heroes-magic-war-h2sln"
     knighthood = "knighthood-v2-ghbch"
+    rooms_and_exists = "roomsexits-xk87l"
 
 
 class PossibleDatapointTypes(str, Enum):
