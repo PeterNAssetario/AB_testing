@@ -16,6 +16,7 @@ class PossibleCompanyIds(str, Enum):
     sparkgaming = "sparkgaming-vjv6s"
     phoenix_games = "phoenix-games-cd8wx"
     webelinx = "webelinx-ewo7l"
+    lucky_day = "lucky-day-hybud"
 
 
 class PossibleProjectIds(str, Enum):
@@ -27,6 +28,7 @@ class PossibleProjectIds(str, Enum):
     heroes_magic_war = "heroes-magic-war-h2sln"
     knighthood = "knighthood-v2-ghbch"
     rooms_and_exists = "roomsexits-xk87l"
+    lucky_day = "lucky-day-sjtxs"
 
 
 class PossibleDatapointTypes(str, Enum):
