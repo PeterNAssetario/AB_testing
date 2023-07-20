@@ -1,0 +1,19 @@
+{
+	"name": "Ab Testing",
+	"dockerComposeFile": [
+		"docker-compose.yaml"
+	],
+	"service": "dev",
+	"workspaceFolder": "/home/node/app",
+	"settings": {
+		"terminal.integrated.shell.linux": "/bin/bash"
+	},
+	"remoteUser": "root",
+	"shutdownAction": "stopCompose",
+	"extensions": [
+		"ms-python.python",
+		"ms-python.vscode-pylance",
+		"ms-toolsai.jupyter"
+	],
+	"postCreateCommand": "bash -c 'history -a'"
+}

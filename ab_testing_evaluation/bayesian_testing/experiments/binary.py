@@ -1,9 +1,9 @@
+from typing import Dict, List, Tuple
 from numbers import Number
-from typing import List, Tuple
 
-from bayesian_testing.experiments.base import BaseDataTest
 from bayesian_testing.metrics import eval_bernoulli_agg
 from bayesian_testing.utilities import get_logger
+from bayesian_testing.experiments.base import BaseDataTest
 
 logger = get_logger("bayesian_testing")
 
@@ -11,7 +11,6 @@ logger = get_logger("bayesian_testing")
 class BinaryDataTest(BaseDataTest):
     """
     Class for Bayesian A/B test for binary-like data (conversions, successes, ...).
-
     After class initialization, use add_variant methods to insert variant data.
     Then to get results of the test, use for instance `evaluate` method.
     """
@@ -38,37 +37,43 @@ class BinaryDataTest(BaseDataTest):
     def b_priors(self):
         return [self.data[k]["b_prior"] for k in self.data]
 
-    def eval_simulation(self, sim_count: int = 20000, seed: int = None) -> Tuple[dict, dict]:
+    def eval_simulation(
+        self, sim_count: int = 20000, seed: int = None
+    ) -> Tuple[dict, dict, dict, Dict[str, dict]]:
         """
         Calculate probabilities of being best and expected loss for a current class state.
-
         Parameters
         ----------
         sim_count : Number of simulations to be used for probability estimation.
         seed : Random seed.
-
         Returns
         -------
         res_pbbs : Dictionary with probabilities of being best for all variants in experiment.
         res_loss : Dictionary with expected loss for all variants in experiment.
         """
-        pbbs, loss = eval_bernoulli_agg(
+        pbbs, loss, total_gain, a_posteriors, b_posteriors = eval_bernoulli_agg(
             self.totals, self.positives, self.a_priors, self.b_priors, sim_count, seed
         )
         res_pbbs = dict(zip(self.variant_names, pbbs))
         res_loss = dict(zip(self.variant_names, loss))
+        res_total_gain = dict(zip(self.variant_names, total_gain))
+        res_a_posteriors = dict(zip(self.variant_names, a_posteriors))
+        res_b_posteriors = dict(zip(self.variant_names, b_posteriors))
 
-        return res_pbbs, res_loss
+        res_posteriors_all = {
+            "res_a_posteriors": a_posteriors,
+            "res_b_posteriors": b_posteriors,
+        }
+
+        return res_pbbs, res_loss, res_total_gain, res_posteriors_all
 
     def evaluate(self, sim_count: int = 20000, seed: int = None) -> List[dict]:
         """
         Evaluation of experiment.
-
         Parameters
         ----------
         sim_count : Number of simulations to be used for probability estimation.
         seed : Random seed.
-
         Returns
         -------
         res : List of dictionaries with results per variant.
@@ -80,12 +85,36 @@ class BinaryDataTest(BaseDataTest):
             "positive_rate",
             "prob_being_best",
             "expected_loss",
+            "expected_total_gain",
+            "a_post",
+            "b_post",
         ]
-        positive_rate = [round(i[0] / i[1], 5) for i in zip(self.positives, self.totals)]
-        eval_pbbs, eval_loss = self.eval_simulation(sim_count, seed)
+
+        positive_rate = [
+            round(i[0] / i[1], 5) for i in zip(self.positives, self.totals)
+        ]
+        (
+            eval_pbbs,
+            eval_loss,
+            eval_total_gain,
+            eval_posteriors,
+        ) = self.eval_simulation(sim_count, seed)
         pbbs = list(eval_pbbs.values())
         loss = list(eval_loss.values())
-        data = [self.variant_names, self.totals, self.positives, positive_rate, pbbs, loss]
+        total_gain = list(eval_total_gain.values())
+        a_post = list(eval_posteriors["a_posteriors"].values())
+        b_post = list(eval_posteriors["b_posteriors"].values())
+        data = [
+            self.variant_names,
+            self.totals,
+            self.positives,
+            positive_rate,
+            pbbs,
+            loss,
+            total_gain,
+            a_post,
+            b_post,
+        ]
         res = [dict(zip(keys, item)) for item in zip(*data)]
 
         return res
@@ -95,16 +124,13 @@ class BinaryDataTest(BaseDataTest):
         name: str,
         totals: int,
         positives: int,
-        a_prior: Number = 0.5,
-        b_prior: Number = 0.5,
-        replace: bool = True,
+        a_prior: float = 0.5,
+        b_prior: float = 0.5,
     ) -> None:
         """
         Add variant data to test class using aggregated binary data.
         This can be convenient as aggregation can be done on database level.
-
         Default prior setup is set for Beta(1/2, 1/2) which is non-information prior.
-
         Parameters
         ----------
         name : Variant name.
@@ -114,62 +140,45 @@ class BinaryDataTest(BaseDataTest):
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
         b_prior : Prior beta parameter for Beta distributions.
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
-        replace : Replace data if variant already exists.
-            If set to False, data of existing variant will be appended to existing data.
         """
         if not isinstance(name, str):
             raise ValueError("Variant name has to be a string.")
         if a_prior <= 0 or b_prior <= 0:
             raise ValueError("Both [a_prior, b_prior] have to be positive numbers.")
         if totals <= 0:
-            raise ValueError("Input variable 'totals' is expected to be positive integer.")
+            raise ValueError(
+                "Input variable 'totals' is expected to be positive integer."
+            )
         if positives < 0:
-            raise ValueError("Input variable 'positives' is expected to be non-negative integer.")
+            raise ValueError(
+                "Input variable 'positives' is expected to be non-negative integer."
+            )
         if totals < positives:
             raise ValueError("Not possible to have more positives that totals!")
 
-        if name not in self.variant_names:
-            self.data[name] = {
-                "totals": totals,
-                "positives": positives,
-                "a_prior": a_prior,
-                "b_prior": b_prior,
-            }
-        elif name in self.variant_names and replace:
-            msg = (
-                f"Variant {name} already exists - new data is replacing it. "
-                "If you wish to append instead, use replace=False."
-            )
+        if name in self.variant_names:
+            msg = f"Variant {name} already exists - new data is replacing it. "
             logger.info(msg)
-            self.data[name] = {
-                "totals": totals,
-                "positives": positives,
-                "a_prior": a_prior,
-                "b_prior": b_prior,
-            }
-        elif name in self.variant_names and not replace:
-            msg = (
-                f"Variant {name} already exists - new data is appended to variant, "
-                "keeping its original prior setup. "
-                "If you wish to replace data instead, use replace=True."
-            )
-            logger.info(msg)
-            self.data[name]["totals"] += totals
-            self.data[name]["positives"] += positives
+
+        self.data[name] = {
+            "totals": totals,
+            "positives": positives,
+            "a_prior": a_prior,
+            "b_prior": b_prior,
+            "a_posterior": positives + a_prior,
+            "b_posterior": totals - positives + b_prior,
+        }
 
     def add_variant_data(
         self,
         name: str,
         data: List[int],
-        a_prior: Number = 0.5,
-        b_prior: Number = 0.5,
-        replace: bool = True,
+        a_prior: float = 0.5,
+        b_prior: float = 0.5,
     ) -> None:
         """
         Add variant data to test class using raw binary data.
-
         Default prior setup is set for Beta(1/2, 1/2) which is non-information prior.
-
         Parameters
         ----------
         name : Variant name.
@@ -178,8 +187,6 @@ class BinaryDataTest(BaseDataTest):
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
         b_prior : Prior beta parameter for Beta distributions.
             Default value 0.5 is based on non-information prior Beta(0.5, 0.5).
-        replace : Replace data if variant already exists.
-            If set to False, data of existing variant will be appended to existing data.
         """
         if len(data) == 0:
             raise ValueError("Data of added variant needs to have some observations.")
@@ -189,4 +196,4 @@ class BinaryDataTest(BaseDataTest):
         totals = len(data)
         positives = sum(data)
 
-        self.add_variant_data_agg(name, totals, positives, a_prior, b_prior, replace)
+        self.add_variant_data_agg(name, totals, positives, a_prior, b_prior)
